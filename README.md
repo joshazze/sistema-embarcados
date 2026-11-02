@@ -114,7 +114,7 @@ flowchart LR
     Mega --> Driver[Driver de potencia]
     Driver --> Trava[Fechadura 12 V / 2 A]
     Fonte[Fonte 12 V] --> Trava
-    Mega <-->|UART 38400 bps com conversor de nivel| CAM[ESP32-CAM]
+    Mega <-->|UART 38400 bps com divisor de tensao| CAM[ESP32-CAM]
     CAM <-->|Wi-Fi / HTTP local| Servidor[Python no computador]
     Servidor --> Banco[(SQLite e fotos)]
     Navegador[Pagina de administracao] <-->|HTTP local| Servidor

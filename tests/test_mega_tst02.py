@@ -74,6 +74,9 @@ static int buzzerPin() { return pinOut[BUZZER_PIN]; }
 
 # Dublê de LCD que guarda o texto das duas linhas. displayTick real redesenha tudo.
 MOCKS_LCD = r'''
+#define F(s) s
+#define LCD_SERIAL_MIRROR 1
+struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
 #include <cstdlib>
 bool lcdReady = true;
 struct FakeWire {

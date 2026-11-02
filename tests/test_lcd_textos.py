@@ -81,5 +81,13 @@ class LcdTextosTests(unittest.TestCase):
             self.assertLessEqual(len(rotulo), COLUNAS, 'rótulo de LCD com mais de 16 colunas: %r' % rotulo)
 
 
+    def test_espelho_serial_tem_flag_e_prefixo(self):
+        self.assertIn('#define LCD_SERIAL_MIRROR 1', self.sketch)
+        self.assertIn('#ifndef LCD_SERIAL_MIRROR', self.sketch)
+        self.assertIn('F("LCD| ")', self.sketch)
+        exemplo = (MEGA / 'Config.example.h').read_text()
+        self.assertIn('// #define LCD_SERIAL_MIRROR 0', exemplo)
+
+
 if __name__ == '__main__':
     unittest.main()

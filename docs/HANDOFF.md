@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 30/10/2026, sessão 2)
+# Handoff: controle de acesso ESP32 (estado em 02/11/2026, sessão 4 e continuação, bancada)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -12,7 +12,7 @@ Controle de acesso com biometria, teclado, fechadura e auditoria:
 - Arduino Mega 2560: máquina de estados, porta, buzzer, LCD, teclado, DY50
   (leitor de digital), EEPROM e fila de eventos.
 - ESP32-CAM Ai-Thinker: tira uma foto por acesso autorizado e envia ao servidor.
-  Conversa com o Mega por UART (conversor de nível).
+  Conversa com o Mega por UART (divisor de tensão).
 - Servidor Python + SQLite (`servidor/`): recebe eventos e fotos, guarda auditoria
   e cadastros, expõe o painel web (`servidor/static/`).
 
@@ -24,8 +24,8 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
 
 - `LOCK_MODE=0` até o ensaio da fechadura (`docs/MONTAGEM.md`, seção 6).
 - Não gravar placas, não fazer commit nem push sem coordenar com o dono.
-- Marcar toda evidência como: verificado em host, compilado ou não verificado.
-- Nada foi testado em hardware. Simulação não é confirmação física.
+- Marcar toda evidência como: verificado em host, verificado em hardware, compilado, simulado, análise de código, estimativa ou não verificado.
+- Em hardware, foram verificados em 30/10/2026 (noite) o passo 3 da bancada (Mega pelo USB, sem LCD) e a matriz do teclado 4x4 por continuidade. A leitura do teclado pelo Mega não foi verificada em 30/10/2026; foi verificada em 02/11/2026 (sessão 4, seção 4). Em 02/11/2026 também foram verificados o buzzer ativo, o circuito do buzzer com BC546 (acionamento pelo firmware verificado depois, na continuação de 02/11/2026) e os resistores medidos. Na mesma continuação: DY50 comunicando (dy50=ok), cadastro, acesso pela digital e pela senha e buzzer pelo firmware, verificados em hardware. Simulação não é confirmação física.
 - O agente principal só orquestra: implementadores Haiku, revisores Sonnet,
   um agente distinto por tarefa; arquivos disjuntos podem rodar em paralelo.
 - Uma pergunta por vez. Sem emojis (exceto marcas de certo/errado).
@@ -48,7 +48,7 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
   (`controle-acesso-esp32`). Existe uma cópia antiga em outra pasta do dono que
   não deve mais ser usada.
 - `Config.h` locais (Mega e CAM) são ignorados pelo Git e ainda têm valores de
-  exemplo. Não versionar.
+  exemplo, exceto o `ADMIN_PIN` do Mega, definido pelo dono em 30/10/2026. Não versionar.
 - Antes de commitar: stage por arquivo, nunca por diretório. Confirme que
   `Config.h`, `*.sqlite3` e `__pycache__` não entram no commit.
 - Commits sem linha `Co-Authored-By`.
@@ -162,7 +162,102 @@ Sonnet. Níveis de evidência e números estão em docs/VALIDACAO.md.
   suprimidos). Relatos de "sem avisos" daquele script não valem.
 - CAM não alterada nem recompilada nesta sessão.
 
-## 5. Verificação (30/10/2026)
+### Sessão 3 (30/10/2026, noite): primeira bancada
+
+Passo 3 de `docs/MONTAGEM.md` (Mega sozinho pelo USB). Níveis em docs/VALIDACAO.md.
+
+- Placa: Arduino Mega 2560 clone com CH340 (`/dev/cu.usbserial-1130`), alimentada só pelo USB do Mac. D30 e D31 ao GND (porta fechada simulada). LCD, teclado, DY50, LED, buzzer, CAM e fechadura desconectados; `LOCK_MODE=0`.
+- Gravação pelo dono: Arduino IDE 2.3.10, placa "Arduino Mega or Mega 2560", pacote Arduino AVR Boards; Adafruit Fingerprint 2.1.4, Crypto 0.4.0, Keypad 3.1.1, LiquidCrystal I2C 1.1.2. Upload OK. `ADMIN_PIN` definido no `Config.h` local (não versionado).
+- Boot: `BOOT boot=2 storage=ok lcd=timeout dy50=indisponivel lock_mode=0` (provável: um boot após a gravação e outro ao abrir a porta).
+- AUTH pelo Serial Monitor: `OK authenticated` (havia bytes de lixo do reinício, sem significado).
+- STATUS: `last_id=0 queued=1 dropped=0 replies_dropped=0 lcd=timeout dy50=indisponivel lock_mode=0`. queued=1, esperado pelo docs/MONTAGEM.md passo 3 (device_boot aguardando a CAM).
+- Tensões (alicate BOMVINK, 600 V DC, resolução 1 V): D16 "004" (~4 V, medição grosseira); D35 = 0 V.
+- LCD não testado: o display é um 1602A sem módulo I2C PCF8574. `lcd=timeout` com LCD ausente foi confirmado em hardware. Decisão do dono: comprar o módulo; se o chip for PCF8574A, o endereço costuma ser 0x3F; ajustar `LCD_ADDRESS` no `Config.h` local. Repetir o passo 3 só para o LCD.
+- O adaptador de gravação da ESP32-CAM ainda não foi comprado: os passos 1 e 2 do roteiro (CAM) seguem bloqueados.
+- Teclado 4x4 (`docs/MONTAGEM.md` 3.4): teclas rígidas, placa verde, só os 8 furos do meio são contatos (sem pinos soldados). Matriz confirmada por continuidade: furos 1 a 4 = C1 a C4; furos 5 a 8 = R1 a R4 (teclado de frente, furos embaixo, da esquerda para a direita). Teclas testadas: 1, 2, 3, A, 4, 7, * e D.
+- Ligação provisória (jumpers macho presos com isopor, sem solda): contato ruim e instável. Teste com o firmware: `STATUS` com `queued=1`; `123456#` e `111111#` não mudaram o queued (continuou 1). Jumper encostado à mão entre D22-D26 (tecla 1) e D25-D28 (#), sem o teclado, também não funcionou. Hipótese (análise de código, não verificada): contato trepidando ou jumper encostado gera vários dígitos; `handleKey` só avalia senha com 6 dígitos (10 no admin), então a entrada vira "Entrada invalida" sem evento nem LCD. Ainda não se sabe se o Mega lê as teclas. (Resolvido em 02/11/2026, ver a subseção da sessão 4: a causa era o contato provisório.)
+- Decisão do dono (31/10/2026): manter este teclado; a dupla solda a barra de 8 pinos. Teclado de membrana descartado. Feito em 02/11/2026 (sessão 4).
+- LED RGB (`docs/MONTAGEM.md` 3.7): ainda não ligado (em 02/11/2026 o módulo estava ausente; ver sessão 4). Módulo com pinos `R G B GND` (cátodo comum, como `RGB_COMMON_ANODE = false` no `Config.example.h`; conferir no `Config.h` local). Pendente antes de energizar: verificar se o módulo tem resistores na placa; se não tiver, um resistor por canal, valor pela ficha. Pinos: R -> D32, G -> D33, B -> D34, GND -> GND.
+
+### Sessão 4 (02/11/2026): teclado, buzzer e DY50
+
+Bancada com a dupla. O dono executou tudo na placa; o agente orientou. Níveis em docs/VALIDACAO.md.
+
+**Teclado 4x4 (verificado em hardware)**
+- Barra de 8 pinos soldada nos furos do meio. Continuidade com alicate BOMVINK: nenhum par de pinos vizinhos conduz sem tecla; tecla 1 conduz pinos 1 a 5; tecla # conduz pinos 3 a 8.
+- Ligação: pino 1 = C1 = D26 (laranja); pino 2 = C2 = D27 (amarelo); pino 3 = C3 = D28 (azul); pino 4 = C4 = D29 (roxo); pino 5 = R1 = D22 (cinza); pino 6 = R2 = D23 (branco); pino 7 = R3 = D24 (verde); pino 8 = R4 = D25 (laranja 2). D30 e D31 continuam ao GND.
+- Porta serial: `/dev/cu.usbserial-130` (antes `-1130`). Boot: `BOOT boot=13 storage=ok lcd=timeout dy50=indisponivel lock_mode=0`. AUTH feito pelo dono no Serial Monitor; tentativas com PIN errado responderam `ERR auth`, e depois veio `OK authenticated`.
+- Sequência: boot queued=1 (device_boot); `123456#` leva a queued=2; `111111#` a queued=3; `789000#` a queued=4 (`STATUS`: `last_id=0 queued=4 dropped=0 replies_dropped=0 lcd=timeout dy50=indisponivel lock_mode=0`). Cada senha errada de 6 dígitos gerou um access_denied na fila. Teclas 0 a 9 e # exercitadas: as senhas cobrem as linhas R1 a R4 e as colunas C1 a C3. A coluna C4 foi verificada depois, com a tecla D (ver abaixo). As teclas A, B, C e * foram exercitadas no diagnóstico de 02/11 (ver abaixo); no modo normal do firmware do projeto, A, B e C não têm efeito observável e * limpa a entrada.
+- Resolve a pendência da sessão 3: a causa era o contato provisório. O sketch de diagnóstico previsto na sessão 3 não foi necessário para isso; ele foi gravado depois, em 02/11, para conferir as 16 teclas (ver abaixo).
+- Coluna C4 (pino 4, D29, jumper roxo), verificada em 02/11/2026:
+  - Primeiro teste `111` + `D` + `123456#` falhou. Os jumpers verdes D30/D31 tinham sido retirados; o Mega viu porta aberta (boot com queued=2: device_boot e forced_open), a porta ficou em Alarme, e a tecla D só limpa a entrada com a porta em repouso (análise de código, `handleKey`). Ao recolocar os verdes, queued subiu para 1 (provável evento de porta fechada; análise de código).
+  - Com boot limpo (boot=23, porta fechada, queued=1), `111` + `D` + `123456#` não subiu o queued. O controle `123456#` sozinho subiu para 2 (teclado lido). Continuidade: D conduz pinos 4 a 8; A conduz pinos 4 a 5; o jumper roxo conduz de ponta a ponta e estava no D29. O jumper foi retirado e recolocado firme; após novo boot, `111` + `D` + `123456#` levou queued de 1 para 2: a tecla D foi lida. Causa provável da falha anterior: jumper roxo frouxo no conector do Mega (inferência).
+  - Conclusão: as 4 linhas e as 4 colunas do teclado foram verificadas em hardware. A, B, C e * foram exercitadas no diagnóstico de 02/11 (abaixo).
+  - Lição: os jumpers verdes D30/D31 ao GND precisam estar presentes em todos os testes de teclado; sem eles a porta é vista aberta.
+- Diagnóstico das 16 teclas (02/11/2026, sketch DiagTeclado, fora do repositório e não versionado; mesmo mapa e pinos do projeto; biblioteca Keypad 3.1.1; imprime cada tecla na serial a 115200): as 16 teclas foram lidas com linha e coluna corretas (linhas R1 a R4 = D22 a D25; colunas C1 a C4 = D26 a D29). Teclado 4x4 completo verificado em hardware. A falha anterior da tecla D não era de código: porta vista aberta com os verdes D30/D31 retirados (previsto) e, provavelmente, jumper roxo frouxo (inferência). O MegaControlador foi regravado depois do diagnóstico: linha BOOT `BOOT boot=26 storage=ok lcd=timeout dy50=indisponivel lock_mode=0`; o contador foi de 23 para 26, o que indica (inferência pelo contador) que o diagnóstico não alterou a EEPROM.
+
+**Buzzer (verificado em hardware, salvo onde indicado)**
+- Módulo SainSmart de 3 pinos `S V G`: com V em 5 V e G em GND, silêncio; com S no 5 V, silêncio. Não apita com nível fixo. Provavelmente é buzzer passivo (inferência). Não serve com o firmware atual, que só faz HIGH/LOW no D36. Descartado.
+- Buzzer solto de 2 pernas, fundo fechado com resina: ligado com + no 5 V e - no GND do Mega, apitou contínuo. É ativo.
+- Transistor BC327-25 (marcação `C327-25`, lote `W 7n`): é PNP e não serve no circuito NPN da seção 3.8 (com PNP no lado alto a lógica inverte e o buzzer apitaria em repouso). Em uso: BC546 (NPN; pinagem C-B-E com a face escrita virada para quem olha e pernas para baixo).
+- Resistores medidos com o alicate: tira de 4 unidades = 1 kΩ; tira do meio = 10 kΩ; tira de baixo (muitas) = 330 Ω.
+- Montagem na protoboard: buzzer + na trilha 5 V; buzzer - no coletor; emissor no GND; base -> 10 kΩ -> GND; base -> 330 Ω (no lugar do 470 Ω; corrente no D36 de cerca de 13 mA) -> fio de teste. Antes de energizar: trilhas + e - sem continuidade.
+- Testes: fio de teste no 5 V apita (verificado); fio de teste no D36 com o Mega em repouso fica em silêncio (verificado). Fio no GND isolado não foi testado separadamente (equivalente ao D36 em LOW). Acionamento do D36 em HIGH pelo firmware: não verificado nesta sessão; verificado depois, na continuação de 02/11/2026 (EntryExpired, 3 bipes).
+- Análise de código (`DoorLogic.h` e `BuzzerLogic.h`, sem execução): o buzzer só toca em EntryExpired (3 bipes: acesso autorizado sem abrir a porta em 60 s) e em OpenTooLong (bipe a cada 2 s, só a partir do estado Open, isto é, após acesso autorizado e porta aberta por 5 min). ForcedOpen (tirar o jumper de D30/D31) não toca o buzzer; o BuzzerLogic até reseta nesse evento. Logo, o teste do buzzer pelo firmware depende de um usuário cadastrado no DY50 (verificado depois, na continuação de 02/11/2026: EntryExpired, 3 bipes).
+- O buzzer fica montado, com o fio de teste no D36.
+
+**LED RGB (pendência de material)**
+- O módulo não está com o dono (peça ausente). O firmware funciona sem ele. O passo 3 da seção 9 fica bloqueado por material.
+
+**DY50 (adiado no fim da sessão 4; resolvido na continuação, abaixo)**
+- Anúncio Eletrogate: alimentação de 3 a 6 V, corrente < 120 mA, pico < 140 mA, UART TTL 57600 padrão. Não informa nível lógico nem pinagem.
+- A placa desta unidade tem 6 pinos rotulados `GND`, `RX`, `TX`, `3V3`, `T_OUT` e `T_3V3`. Pela marcação 3V3, alimentar com 3,3 V e não com 5 V. UART provavelmente em 3,3 V (inferência pela marcação; não medida).
+- Cabo de 6 fios, todos vermelhos, com conector de passo ~1 mm (JST SH/1.25) que não encaixa em jumper. Decisão do dono (02/11/2026): cortar o conector da ponta solta, identificar cada fio por continuidade contra os rótulos da placa e soldar jumpers machos (GND preto; 3V3 em cor exclusiva, não vermelha, marcada "3V3"; TX e RX em cores distintas). T_OUT e T_3V3 isolados, sem uso.
+- (superado; ver continuação) Ligação planejada: 3V3 em fonte de 3,3 V separada, com GND comum; GND no GND; TX do DY50 no D19 direto; D18 -> 1 kΩ -> RX do DY50; RX do DY50 -> dois 1 kΩ em série -> GND (divisor).
+- Ponto em aberto: a especificação oficial do Mega 2560 cita 50 mA para o pino 3.3V; o DY50 pede menos de 120 mA (pico menos de 140 mA). Não usar o pino 3.3V do Mega para o DY50; usar fonte de 3,3 V separada com GND comum.
+- (superado; ver continuação) Adiado (02/11/2026, fim da sessão): sem fonte de 3,3 V utilizável hoje. O dono achou a fonte de protoboard YwRobot MB102 (reguladores AMS1117 de 3,3 V e 5 V; jumper por lado 3.3 / OFF / 5V; entrada P4 6,5 a 12 V ou USB-A), mas não há como alimentá-la. Um módulo Hi-Link HLK-PM12 (entrada 100 a 240 V AC, saída 12 V 0,25 A) foi recusado por segurança: lado da tomada com fios e emendas expostos em caixa aberta, com risco de choque. Um módulo Bluetooth HC-05/ZS-040 e um módulo RTC com suporte de bateria de botão apareceram e não servem. O cabo do DY50 já está cortado e preparado com jumpers (mapa fio -> rótulo feito pelo dono; cores não informadas ao agente).
+- (superado; ver continuação) Primeiro: alimentar só 3V3 e GND e medir o TX com o alicate. Esperado "002" ou "003" (o alicate lê cerca de 1 V abaixo). Parar se der "004" ou mais. Na continuação de 02/11/2026 este passo foi pulado: a medição do TX não foi executada.
+- Decisão (02/11/2026): a ordem da MONTAGEM 3.9 (ligar o DY50 só depois do passo 7 da CAM) foi adiantada, porque a CAM aguarda bateria e step-down e a ligação do DY50 não depende da CAM.
+
+### Sessão 4, continuação (02/11/2026): DY50, espelho do LCD, cadastro e acessos
+
+Bancada com a dupla. Níveis em docs/VALIDACAO.md (registros de 02/11/2026).
+
+**Alimentação e divisor do DY50 (verificado em hardware, salvo indicação)**
+- Fonte: fonte de parede de 7 V (valor informado pelo dono; etiqueta não fotografada), com plugue P4 no DC-in da fonte de protoboard YwRobot MB102. Um adaptador 5 V 1 A (F05W-050100SPAE) também apareceu; não foi usado.
+- Saída de 3,3 V medida fora da protoboard: "003" no alicate BOMVINK (medição grosseira).
+- Ponta da protoboard: a MB102 só encaixa na ponta "0" (lado do Mega). Trilhas de baixo com jumper em 3.3 (metade esquerda = 3,3 V). Trilhas de cima (5 V e GND do Mega): o jumper ficou em 3.3 por engano (medido "003" na trilha de cima com a USB desconectada) e foi corrigido retirando o jumper amarelo desse lado (OFF). Antes de ligar a USB: trilha de cima "000", trilha de baixo "003".
+- O GND da MB102 encosta na trilha azul de cima e faz o GND comum com o Mega. O Mega segue alimentado só pela USB. Nunca ligar o 5V do Mega na trilha de 3,3 V.
+- Trilhas de cima cortadas no meio, perto da coluna 30; usar só a metade esquerda.
+- Divisor montado (medido desligado): 1 kΩ em 18c-21c; 1 kΩ em 21b-24b; 1 kΩ em 24c-27c; jumper 27a à trilha azul de cima. Coluna 18 até GND = 3 kΩ; coluna 21 até GND = 2 kΩ; trilha vermelha de cima até azul de cima = 3 kΩ (caminho pelo Mega desligado; sem curto).
+- Ligação: D18 na coluna 18e; RX do DY50 na 21e; TX do DY50 direto no D19; GND do DY50 na trilha azul de cima; 3V3 do DY50 na trilha vermelha de baixo. O cabo do DY50 foi emendado por um conector branco a fios coloridos e jumpers.
+- Medição do TX do DY50 com o alicate: não registrada nesta continuação.
+
+**Pinos 18 e 19 do clone**: a serigrafia diz "RX1 18" e "TX1 19" (trocada). Medido com o firmware rodando e pinos livres: pino 18 = "005" (TX em repouso alto); pino 19 = "000". Logo pino 18 = TX1 e pino 19 = RX1, como no ATmega2560. Seguir os números, não o texto.
+
+**Resultado**: `BOOT boot=33 storage=ok lcd=timeout dy50=ok lock_mode=0`. DY50 comunicando com o Mega. A alimentação veio da MB102, não do pino 3.3V do Mega.
+
+**Espelho do LCD na serial (código; verificado em host, compilado e visto em hardware)**
+- Mudança em `firmware/MegaControlador/MegaControlador.ino` e em `Config.example.h` (ver a seção 6). Implementado por Haiku, revisado e aprovado por Sonnet. O dono regravou o Mega com essa versão.
+- Suíte: 147 testes, 146 OK. Falha pré-existente, pendência separada: `tests/test_server.py::test_deeply_nested_json_reports_400` (espera "JSON inválido ou corpo muito grande.", recebe "Dispositivo inválido."). O orquestrador confirmou a mesma falha no commit HEAD a6ff44a, sem a mudança. `servidor/` não foi alterado.
+- Compilação (arduino-cli do Arduino IDE, core arduino:avr do Mac, sobre `Config.example.h`): 39624 B de flash, 4549 B de RAM, zero avisos no .ino (21 avisos de core e bibliotecas). Método diferente do build da sessão 2; não comparável.
+- Nota da revisão: o espelho sai sem exigir AUTH e mostra textos como "Acesso liberado | ID n" (a mesma informação do LCD); linhas `LCD|` podem se intercalar com respostas de comando.
+
+**Cadastro e acessos (verificado em hardware)**
+- Cadastro pelo teclado: PIN de administrador + #, tecla 1, digital duas vezes, senha de 6 dígitos duas vezes (escolhida pelo dono; não registrada). Espelho: `LCD| Cadastrado | ID 001`. STATUS `last_id=1 queued=3` (device_boot, admin_login, user_enrolled). LIST `ID 1 ativo`.
+- Acesso pela digital: `LCD| Acesso liberado | ID 001`; queued 3 -> 4 (access_granted).
+- Sem abrir a porta (verdes D30/D31 no GND), após 60 s: 3 bipes curtos (EntryExpired), ouvidos pelo dono. Buzzer pelo firmware verificado.
+- Depois do EntryExpired: `LCD| Tempo esgotado | Acesso encerrado`, depois `LCD| Senha ou digital | # OK * Limpar`. Ao digitar a senha de 6 dígitos do ID 1, o espelho mostrou só `*` até `******` (máscara confirmada); com `#`: `LCD| Acesso liberado | ID 001`. Acesso pela senha do usuário cadastrado verificado.
+- Teclas soltas geraram "Entrada invalida | 6 ou 10 digitos", sem efeito.
+
+**Ciclo de porta com os verdes D30/D31 (02/11/2026, verificado em hardware)**
+- Digital do ID 1 com os verdes ao GND: `LCD| Acesso liberado | ID 001`. Verdes retirados do GND: `LCD| Porta aberta | ID 001`. Verdes recolocados: `LCD| Porta fechada | ID 001`, e o LCD volta a `Senha ou digital`.
+- Durante o manuseio na bancada, apareceu duas vezes `LCD| Feche a porta | Sem autorizacao`, seguido de `LCD| Porta fechada | ID 000`. Causa informada pelo dono: ele mexeu sem querer no jumper verde D30/D31; a porta foi vista aberta sem autorização (forced_open, comportamento esperado). "ID 000" ao fechar é o P3 já conhecido.
+- Também apareceu `LCD| Falha no leitor | Tente novamente`, depois `LCD| Senha ou digital | DY50 fora do ar`, e logo voltou sozinho a `# OK * Limpar`: queda momentânea do DY50 e recuperação automática, observadas em hardware. Causa informada pelo dono: ele mexeu sem querer no fio do DY50.
+- STATUS depois: `last_id=1 queued=14 dropped=0 replies_dropped=0 lcd=timeout dy50=ok lock_mode=0` (fila acumulando eventos sem a CAM, esperado).
+- Pendências: medição do pino 35 (saída da fechadura) não foi feita; firmar a ligação do DY50 (solda ou termorretrátil na emenda do cabo).
+
+## 5. Verificação (30/10/2026 e 02/11/2026)
 
 | Verificação | Resultado | Evidência |
 |---|---|---|
@@ -173,7 +268,22 @@ Sonnet. Níveis de evidência e números estão em docs/VALIDACAO.md.
 | `node --check` do painel | OK | verificado em host |
 | Painel no Chrome local | 390 px após as correções; 1280 px só na verificação inicial A1, antes das correções. Teclado físico e leitor de tela não verificados | verificado em host (navegador local) |
 | simavr do Mega (boot, hash, senha, EEPROM) | Tempos e boot sem LCD em VALIDACAO.md | simulado |
-| Ensaio físico | nenhum | não verificado |
+| Ensaio físico: passo 3 (Mega pelo USB, sem LCD), 30/10/2026 noite | Boot, AUTH e STATUS conforme o esperado; D16 ~4 V (medição grosseira); D35 0 V; LCD não testado (display sem módulo I2C) | verificado em hardware; LCD: não verificado |
+| Teclado 4x4: matriz e ordem dos furos (sessão 3), 30/10/2026 noite | Matriz confirmada por continuidade (C1 a C4 = furos 1 a 4, R1 a R4 = furos 5 a 8); teclas 1, 2, 3, A, 4, 7, * e D testadas | verificado em hardware (alicate BOMVINK) |
+| Teclado 4x4 lido pelo Mega (sessão 3), 30/10/2026 noite | Ligação provisória sem solda; `123456#`, `111111#` e jumper à mão D22-D26 / D25-D28: queued continuou 1. Causa provável (hipótese por análise de código): contato instável ou trepidação. Resolvido em 02/11/2026 (sessão 4): a causa era o contato provisório | não verificado (registro de 30/10/2026; resolvido em 02/11/2026) |
+| Teclado 4x4 soldado e lido pelo Mega (sessão 4), 02/11/2026 | Barra de 8 pinos soldada; continuidade com alicate; firmware: boot, `123456#`, `111111#`, `789000#`, queued 1 -> 4; cada senha errada gerou access_denied; teclas 0 a 9 e #; linhas R1 a R4 e colunas C1 a C3 pelas senhas. A, B, C e * exercitadas no diagnóstico de 02/11 (ver a linha das 16 teclas). Resolve a pendência da sessão 3 | verificado em hardware |
+| Teclado 4x4, coluna C4 (pino 4, D29), 02/11/2026 | Primeiro teste falhou com os jumpers verdes D30/D31 retirados (porta vista aberta). Com boot limpo, `111` + `D` + `123456#` não subiu o queued; após recolocar o jumper roxo firme e novo boot, queued 1 -> 2 (tecla D lida). Causa provável da falha: jumper roxo frouxo (inferência) | verificado em hardware |
+| Teclado 4x4, diagnóstico das 16 teclas (sketch DiagTeclado, fora do repositório), 02/11/2026 | 16 de 16 teclas lidas com linha e coluna corretas; teclado 4x4 completo. A, B, C e * exercitadas (com o firmware do projeto, A, B e C não têm efeito observável no modo normal) | verificado em hardware (ver seção 4, sessão 4) |
+| Buzzer: módulo S V G e buzzer de 2 pernas (sessão 4), 02/11/2026 | Módulo S V G: silêncio com S em GND e com S em 5 V; descartado (provavelmente passivo, inferência). Buzzer de 2 pernas ligado direto ao 5 V e GND apitou contínuo: é ativo | verificado em hardware |
+| Circuito do buzzer com BC546 (sessão 4), 02/11/2026 | Protoboard conforme MONTAGEM 3.8, com 330 Ω na base; fio de teste no 5 V apita; no D36 com o Mega em repouso fica em silêncio. Acionamento pelo firmware (D36 em HIGH): não verificado nesta sessão; verificado depois, na continuação de 02/11/2026 (EntryExpired, 3 bipes). Comportamento do firmware (EntryExpired, OpenTooLong): análise de código | verificado em hardware (acionamento pelo firmware: não verificado nesta sessão; verificado depois, na continuação de 02/11/2026) |
+| Resistores medidos (sessão 4), 02/11/2026 | Alicate BOMVINK: tira de 4 = 1 kΩ; tira do meio = 10 kΩ; tira de baixo = 330 Ω (valores conforme a medição) | verificado em hardware |
+| Suíte Python (sessão 4, continuação), mesmo comando da linha da suíte | 147 testes, 146 OK; 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (mesma no HEAD a6ff44a, sem a mudança do espelho) | verificado em host |
+| Mega com espelho do LCD, `arduino:avr:mega`, arduino-cli do Arduino IDE (sobre `Config.example.h`), 02/11/2026 | 39624 B de flash, 4549 B de RAM, zero avisos no .ino (21 de core e bibliotecas); não comparável com a linha da sessão 2 | compilado |
+| Espelho do LCD na serial (`LCD_SERIAL_MIRROR`), 02/11/2026 | Testes de host com mocks (2 novos); linhas `LCD\|` vistas no cadastro e no acesso | verificado em host; verificado em hardware |
+| DY50 alimentado pela MB102 e comunicando, 02/11/2026 | `BOOT boot=33 storage=ok lcd=timeout dy50=ok lock_mode=0`; saída 3,3 V da MB102 ("003"; medição grosseira); pino 18 = TX1 e 19 = RX1 medidos; TX do DY50 não medido com o alicate | verificado em hardware |
+| Cadastro e acessos (digital e senha do ID 1), 02/11/2026 | `Cadastrado` e `Acesso liberado` no espelho; STATUS queued 1 -> 4; LIST `ID 1 ativo`; senha mascarada com `*` | verificado em hardware |
+| Buzzer pelo firmware (EntryExpired), 02/11/2026 | 3 bipes após 60 s sem abrir a porta, ouvidos pelo dono | verificado em hardware |
+| Ciclo de porta com verdes D30/D31 e espelho do LCD, 02/11/2026 | Digital do ID 1: `LCD\| Acesso liberado \| ID 001`; verdes retirados: `LCD\| Porta aberta \| ID 001`; verdes recolocados: `LCD\| Porta fechada \| ID 001` e volta a `Senha ou digital`. forced_open por verde mexido sem querer (informado pelo dono); queda do DY50 por fio mexido sem querer, com recuperação automática; STATUS depois `queued=14`, `dy50=ok`. Medição do pino 35 não feita (pendente) | verificado em hardware |
 
 Os mesmos números estão registrados em docs/VALIDACAO.md.
 
@@ -230,9 +340,28 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
   --timeout-exit-code 0 --screenshot-time 5000`; junto com cenário, a sessão ficou
   aberta até o limite de 5 min. O atributo `value` do `wokwi-slide-switch` não
   existe (o CLI avisa), e a chave não tem controle documentado para `set-control`.
+- Leitura da serial do Mega pelo terminal, sem pyserial (não instalado): script Python com `termios`, porta `/dev/cu.usbserial-1130` (em 02/11/2026 apareceu como `/dev/cu.usbserial-130`; o nome pode variar), 115200. O Serial Monitor do IDE precisa estar fechado. AUTH sempre pelo dono (senha nunca no chat).
+- Espelho do LCD na serial: o Mega imprime `LCD| <linha 1> | <linha 2>` sempre que o texto do LCD muda, inclusive sem LCD ligado (`LCD_SERIAL_MIRROR`, padrão 1; pode ser 0 no `Config.h` local). Senhas aparecem só como `*`. Sai sem AUTH, e as linhas podem se intercalar com respostas de comando. Use para acompanhar cadastro e acesso sem display.
+- Pinos do clone Mega: a serigrafia desta placa diz "RX1 18" e "TX1 19", mas medido: pino 18 = TX1 e pino 19 = RX1 (como no ATmega2560). Seguir os números. Vale para o DY50: TX do DY50 no D19; D18 no RX pelo 1 kΩ.
+- Alicate amperímetro BOMVINK: só 600 V DC (resolução 1 V) para tensão contínua; continuidade sem apito para contatos de teclado (a leitura muda ao apertar a tecla). Pontas: preta em COM, vermelha em VΩ. Usado também para medir resistores (02/11/2026).
 
 ## 7. Pendências abertas (priorizadas)
 
+Bancada (bloqueios de material). Inventário completo e conferências em `docs/MATERIAIS.md`, "Situação do material do dono (31/10/2026)".
+- LCD sem módulo I2C: comprar o PCF8574 (atenção ao endereço, 0x27 ou 0x3F; repetir o passo 3 para o LCD).
+- Adaptador da CAM resolvido (31/10/2026): USB-serial PL2303 do dono, reconhecido no Mac (`/dev/cu.usbserial-10`), TX em nível de 3,3 V; passo 1 do roteiro feito (ver `docs/VALIDACAO.md`). A base ESP32-CAM-MB não é mais necessária.
+- Decisão pendente (dono e dupla, na bancada): se a bateria de 12 V e o step-down não chegarem, a única forma de alimentar a CAM seria o pino 5V do adaptador. Isso é exceção à regra da seção 1 do `docs/MONTAGEM.md` (CAM só com fonte própria); serve no máximo para gravar e ver o boot, e a porta USB pode não aguentar o pico do Wi-Fi. Não usar junto com o step-down.
+- Decisões de 31/10/2026: (a) conversor de nível trocado por divisor de tensão (1 kΩ em série e 2 kΩ ao GND, do D16 ao GPIO13; GPIO14 direto no D17), documentado em `docs/MONTAGEM.md` seção 3.3 e passos 4 a 6; (b) energia: bateria 12 V 5200 mAh para a fechadura e step-down LM2596 ajustado em 5,0 V para a CAM; (c) fica o alicate como multímetro (resolução 1 V; brownout observado pela serial); (d) buzzer: usar o módulo de 3 pinos do dono (conferir se é ativo e se tem transistor); atualizado em 02/11/2026: o módulo S V G é passivo e foi descartado; o buzzer solto de 2 pernas é ativo e está em uso com BC546; (e) driver da fechadura: candidato o módulo relé 5 V do dono.
+- Atualizações de 02/11/2026 (sessão 4):
+  - LED RGB: módulo ausente (não está com o dono). Pendência de material; o firmware funciona sem ele.
+  - Divisor da CAM: o DY50 usa 3 resistores de 1 kΩ (1 em série no D18 e 2 no divisor do RX), sobrando 1 de 1 kΩ. Para o divisor da CAM, usar 330 Ω: 3 em série (~1 kΩ) no lugar do 1 kΩ e 6 em série (~2 kΩ) no lugar do 2 kΩ (mesma proporção).
+  - Transistor: BC327-25 (PNP) não serve; em uso, BC546 (NPN).
+  - Continuação de 02/11/2026: DY50, espelho do LCD, cadastro e acessos (digital e senha) resolvidos (seção 4, continuação). Pendências novas: falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (fora do espelho; `servidor/` não alterado) e o commit das mudanças não commitadas, aguardando o dono.
+  - Ciclo de porta de 02/11/2026 (seção 4, continuação): pendentes a medição do pino 35 (não feita) e firmar a ligação do DY50 (solda ou termorretrátil na emenda do cabo).
+- Lista de compras consolidada:
+  1. Módulo I2C PCF8574 para LCD 1602 (endereço 0x27; se for PCF8574A, 0x3F, e ajustar `LCD_ADDRESS` no `Config.h` local). O dono achou um no Mercado Livre ("placa adaptadora PCF8574 I2C para display LCD 16x2/20x4").
+  2. Carregador da bateria de 12 V, se não vier junto (conferir também descarga contínua de 3 A ou mais).
+  3. No carrinho do dono: bateria 12 V 5200 mAh e 2 step-down LM2596 com display.
 Fechadas na sessão 2 (ver seção 4): MEGA-03, MEGA-04, REQ-E4, TST-02 e MEGA-07.
 
 Descartados pelo dono (30/10/2026): CAM-03 (campo `camera_ready` no heartbeat da
@@ -245,7 +374,7 @@ P2:
   buffer de 64 B a 38400 baud, por análise de código; não medida.
 
 P3:
-- `lcd=timeout` também aparece com LCD ausente. É texto livre: só
+- `lcd=timeout` também aparece com LCD ausente (confirmado em hardware em 30/10/2026). É texto livre: só
   `docs/TESTES.md` e `docs/MONTAGEM.md` citam; nenhum teste, servidor ou CAM lê.
 - Painel sem rótulo para os motivos 8 a 16 de `reasonNames` (ex.: "Erro na
   memoria", "Erro de hash"); aparecem crus.
@@ -330,19 +459,23 @@ Pendente:
 - Pico de pilha e heap do Mega: `-fstack-usage` e análise de `String`.
 - Painel: fluxo de foto com a CAM real (o fluxo pela API já foi testado no
   navegador; depende da bancada).
-- Tudo de hardware continua pendente (bancada).
+- Tudo de hardware continua pendente (bancada), exceto o passo 3 e a matriz do teclado por continuidade (30/10/2026), e exceto o teclado lido pelo Mega, o diagnóstico das 16 teclas, o circuito do buzzer e os resistores medidos (02/11/2026, sessão 4), e na continuação de 02/11/2026 o DY50, o espelho do LCD, o cadastro, os acessos (digital e senha) e o buzzer pelo firmware. Pendentes: LED RGB, CAM, LCD, fechadura, porta forçada e porta aberta por tempo.
 
 ## 9. Próximo passo exato
 
-Ordem sugerida:
-1. Opcional, sem hardware: revisão elétrica de `docs/MONTAGEM.md` e
-   `docs/MATERIAIS.md` (níveis 5 V/3,3 V, fonte, conversor de nível, proteção da
-   fechadura) antes de comprar os componentes.
-2. Bancada, passo 3 de `docs/MONTAGEM.md` (Mega sozinho pelo USB), quando o dono
-   estiver com a placa. O adaptador da ESP32-CAM ainda não chegou.
-3. Wokwi: só o buzzer pendente (cenário de porta aberta por tempo ou entrada
-   expirada, se útil). Teclado e LED RGB já foram feitos.
-4. P2 de verificação de senha: decidir se faz verificação incremental.
+Retomada: a combinar com a dupla do dono (hardware).
+
+Estado ao parar (02/11/2026, sessão 4): Mega gravado com o firmware atual (Config.h local com ADMIN_PIN do dono e LOCK_MODE=0); teclado 4x4 soldado e ligado conforme a tabela da seção 4, sessão 4; D30 e D31 ao GND pela trilha azul de cima da protoboard (GND do Mega), não direto ao pino GND; buzzer montado no circuito com BC546 e fio de teste no D36; LED RGB ausente; DY50 energizado pela MB102 (fonte de parede de 7 V; saída 3,3 V) e comunicando (`dy50=ok`); cadastro do ID 1 feito e acessos pela digital e pela senha verificados (seção 4, continuação); espelho do LCD na serial gravado pelo dono; CAM sem bateria e sem step-down; mudanças do espelho e dos docs ainda não commitadas. Ciclo de porta verificado em 02/11/2026 (seção 4, continuação); pendentes: medição do pino 35 (não feita) e firmar a ligação do DY50.
+Teclado: o diagnóstico das 16 teclas foi feito em 02/11/2026 com um sketch temporário (DiagTeclado, fora do repositório, não versionado): 16 de 16 teclas OK (seção 4, sessão 4). O MegaControlador foi regravado depois do diagnóstico: linha BOOT `BOOT boot=26 storage=ok lcd=timeout dy50=indisponivel lock_mode=0`; o contador foi de 23 para 26, o que indica (inferência pelo contador) que o diagnóstico não alterou a EEPROM. Lição: os jumpers verdes D30/D31 ao GND precisam estar presentes em todos os testes de teclado; sem eles a porta é vista aberta. Conferir se o USB está conectado antes de mexer na fiação. Convenção combinada: preto = GND; vermelho = 5 V (nunca sinal); verde = sensores da porta D30/D31 (e R3 do teclado); demais cores para sinais conforme as tabelas.
+
+Ordem sugerida (a partir de 02/11/2026):
+1. Ensaios de `docs/TESTES.md` ainda não executados (os itens marcados como não executados e os ensaios funcionais de bancada), incluindo porta forçada e porta aberta por tempo. Manter os verdes D30/D31 ao GND em todos os testes de porta; sem eles a porta é vista aberta. Conferir `dy50=ok` no STATUS após qualquer reinício.
+   - Lado das trilhas de cima da MB102: OFF, medido `000` antes de ligar a USB (ver seção 4, continuação, e `docs/MONTAGEM.md` 3.9). Nunca ligar o 5V do Mega na trilha de 3,3 V.
+2. LED RGB (`docs/MONTAGEM.md` 3.7; módulo ausente em 02/11/2026): quando houver a peça, antes de energizar, verificar se o módulo tem resistores na placa; se não tiver, um resistor por canal, valor pela ficha. Conferir `RGB_COMMON_ANODE` no `Config.h` local (cátodo comum = `false`, como no `Config.example.h`). Pinos: R -> D32, G -> D33, B -> D34, GND -> GND. Checar: boot com LED apagado; em repouso, pisca azul 200 ms a cada 60 s; tirar um jumper de D30 ou D31 (porta aberta sem autorização) deve levar a alarme com vermelho piscando (350 ms) e `forced_open` (queued +1); só o LED, o buzzer não toca nesse caso. Comportamento esperado por análise de código do firmware, não verificado em hardware.
+3. CAM: com a bateria e o step-down, seguir os passos 2, 4 a 7 da seção 5 de `docs/MONTAGEM.md` (sem bateria, ver a decisão pendente na seção 7). O passo 1 já foi feito com o adaptador PL2303. Divisor da CAM com resistores de 330 Ω (seção 7).
+4. LCD: quando o PCF8574 chegar, repetir o passo 3 da seção 5 de `docs/MONTAGEM.md` só para o LCD.
+5. Depois, os itens antigos: revisão elétrica opcional (`docs/MONTAGEM.md` e `docs/MATERIAIS.md`), Wokwi com só o buzzer pendente, P2 de verificação de senha, e a falha pré-existente de `tests/test_server.py::test_deeply_nested_json_reports_400`.
+6. Decidir o commit: há mudanças não commitadas (`git diff --stat`, 12 arquivos), incluindo `firmware/MegaControlador/MegaControlador.ino`, `Config.example.h`, testes e docs. Aguardando o dono; stage por arquivo; nada de commit até ele decidir.
 
 Depois, o roteiro de bancada existente:
 1. Configuração local, sem versionar:
@@ -355,4 +488,4 @@ Depois, o roteiro de bancada existente:
 3. Depois: `docs/TESTES.md`, "Ensaios funcionais de bancada".
 4. Só então o ensaio da fechadura (`docs/MONTAGEM.md` seção 6).
 
-Ensaios físicos: nenhum executado. A bancada depende do dono e do hardware.
+Ensaios físicos: passo 3 (Mega pelo USB, sem LCD), em 30/10/2026; teclado 4x4 lido pelo Mega (02/11/2026, verificado em hardware); circuito do buzzer com BC546 e buzzer pelo firmware, DY50 comunicando, cadastro e acessos pela digital e pela senha (02/11/2026, verificado em hardware). A bancada depende do dono e do hardware.

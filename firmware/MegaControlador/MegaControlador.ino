@@ -7,6 +7,10 @@
 #include <Keypad.h>
 #include <LiquidCrystal_I2C.h>
 #include "Config.h"
+// Espelho do LCD na serial USB (linhas "LCD| ..."); desligue com LCD_SERIAL_MIRROR 0 em Config.h.
+#ifndef LCD_SERIAL_MIRROR
+#define LCD_SERIAL_MIRROR 1
+#endif
 #include "UserStore.h"
 #include "BootCounter.h"
 #include "Dy50ResponseFilter.h"
@@ -86,6 +90,7 @@ bool serialAuthed = false, serialOverflow = false;
 uint32_t serialTouched = 0;
 String serialLine;
 String lcdPrevA, lcdPrevB;
+String mirrorPrevA, mirrorPrevB;  // último par espelhado na serial (independe do LCD)
 uint32_t lastFingerRecovery = 0, lastLcdRecovery = 0;
 
 bool validPin(const String &pin, size_t length) {
@@ -491,7 +496,6 @@ void lcdRecoveryTick() {
   if (lcdReady) { lcdPrevA = ""; lcdPrevB = ""; }
 }
 void displayTick() {
-  if (!lcdReady) return;
   if (uint32_t(millis() - lastLcd) < 150) return;
   lastLcd = millis();
   String a, b;
@@ -518,6 +522,15 @@ void displayTick() {
     if (entry.length()) for (size_t i = 0; i < entry.length(); ++i) b += '*';
     else b = fingerprintReady ? "# OK * Limpar" : "DY50 fora do ar";
   }
+#if LCD_SERIAL_MIRROR
+  // Espelho na serial USB: o mesmo texto do LCD, inclusive quando o LCD está ausente.
+  if (a != mirrorPrevA || b != mirrorPrevB) {
+    mirrorPrevA = a; mirrorPrevB = b;
+    Serial.print(F("LCD| ")); Serial.print(a.substring(0, 16));
+    Serial.print(F(" | ")); Serial.println(b.substring(0, 16));
+  }
+#endif
+  if (!lcdReady) return;
   if (a != lcdPrevA || b != lcdPrevB) {
     String paddedA = a.substring(0, 16), paddedB = b.substring(0, 16);
     while (paddedA.length() < 16) paddedA += ' ';

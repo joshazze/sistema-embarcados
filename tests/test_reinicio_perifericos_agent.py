@@ -16,6 +16,9 @@ PREFIX = PREFIX.replace('uint8_t deleteModel(uint16_t id) { deleted=id; return 0
                         ' bool verifyPassword() { ++verifyCalls; return verifyOk; }'
                         ' uint8_t getParameters() { return FINGERPRINT_OK; }')
 MOCKS = r'''
+#define F(s) s
+#define LCD_SERIAL_MIRROR 1
+struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
 bool lcdReady=true;
 constexpr uint8_t LCD_ADDRESS = 0x27;
 // Sonda do LCD: beginTransmission/endTransmission. Barramento com timeout ou LCD ausente (NACK).

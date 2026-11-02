@@ -3,7 +3,7 @@
 Este guia liga o Mega (controlador) à ESP32-CAM (rede e foto). A versão com
 ESP32 DevKit foi descontinuada e não faz parte da entrega.
 
-Status: montagem para bancada, ainda não testada em hardware. Os pinos abaixo
+Status: montagem para bancada. Em hardware foram verificados o passo 3 (30/10/2026); em 02/11/2026, o teclado 4x4 lido pelo Mega, o circuito do buzzer, o DY50 alimentado pela MB102 e comunicando (seção 3.9), o cadastro, os acessos pela digital e pela senha e o buzzer pelo firmware. O restante (LED RGB, LCD, CAM e fechadura) ainda não foi testado em hardware. Detalhes em [VALIDACAO.md](VALIDACAO.md). Os pinos abaixo
 foram conferidos no código (`firmware/MegaControlador/Config.example.h`,
 `firmware/MegaControlador/MegaControlador.ino` e `firmware/Esp32CamRede/Esp32CamRede.ino`).
 Valores de ficha de componente aparecem como "conferir na ficha", porque não
@@ -19,7 +19,7 @@ Leia antes de energizar qualquer coisa.
 
 - [ ] 12 V nunca vai para pino de lógica, 3V3, 5V ou GPIO. Só para a fechadura, pela fonte 12 V.
 - [ ] A corrente da fechadura (2 A) não passa pela protoboard nem pela trilha da placa. Use fio e bornes dimensionados.
-- [ ] TX de 5 V do Mega nunca vai direto ao GPIO13 da CAM. Sempre pelo conversor de nível.
+- [ ] TX de 5 V do Mega nunca vai direto ao GPIO13 da CAM. Sempre pelo divisor de tensão da seção 3.3 (1 kΩ em série e 2 kΩ ao GND).
 - [ ] Primeira bancada: `LOCK_MODE=0` no `Config.h` do Mega e fechadura desconectada.
 - [ ] Desligue tudo antes de ligar ou mexer em fios.
 - [ ] Não ligue a fonte 5 V externa ao 5V do Mega enquanto o USB estiver conectado.
@@ -34,10 +34,10 @@ Leia antes de energizar qualquer coisa.
 
 | Pino | Sinal | Liga em | Observação |
 |---|---|---|---|
-| D16 | TX2 (link com a CAM) | Conversor, canal 1 (lado B) | Sinal 5 V |
-| D17 | RX2 (link com a CAM) | Conversor, canal 2 (lado B) | Sinal 5 V |
-| D18 | TX1 (DY50) | RX do DY50 | Conferir nível e tensão do DY50 |
-| D19 | RX1 (DY50) | TX do DY50 | Conferir nível e tensão do DY50 |
+| D16 | TX2 (link com a CAM) | Resistor de 1 kΩ do divisor (seção 3.3) | Sinal 5 V; nunca direto ao GPIO13 |
+| D17 | RX2 (link com a CAM) | GPIO14 da CAM, direto | Recebe 3,3 V da CAM |
+| D18 | TX1 (DY50) | RX do DY50, pelo 1 kΩ (seção 3.9) | Serigrafia do clone diz RX1; medido: TX1 |
+| D19 | RX1 (DY50) | TX do DY50, direto | Serigrafia do clone diz TX1; medido: RX1 |
 | D20 | SDA (LCD) | SDA do backpack I²C | |
 | D21 | SCL (LCD) | SCL do backpack I²C | |
 | D22 a D25 | Linhas R1 a R4 | Teclado | Entradas com pull-up (o Mega lê) |
@@ -48,18 +48,18 @@ Leia antes de energizar qualquer coisa.
 | D33 | LED RGB, verde | Resistor do canal | |
 | D34 | LED RGB, azul | Resistor do canal | |
 | D35 | Entrada do driver da fechadura | Driver (IN) + pull-down 10 kΩ | Ver seção 3.10 |
-| D36 | Buzzer | Base do NPN, por 470 Ω | Ver seção 3.8 |
+| D36 | Buzzer | Base do NPN, por 470 Ω (ou 330 Ω a 1 kΩ) | Ver seção 3.8 |
 | D0 e D1 | USB | Não usar | Ligados ao USB do Mega |
 
 ### ESP32-CAM (Ai-Thinker)
 
 | Pino | Sinal | Liga em | Observação |
 |---|---|---|---|
-| 5V | Alimentação | Fonte 5 V estável | Não usar o 3V3 para alimentar |
+| 5V | Alimentação | Saída do step-down ajustada em 5,0 V (seção 3.1) | Não usar o 3V3 para alimentar |
 | GND | Comum | GND comum | Ver seção 3.1 |
-| 3V3 | Saída de 3,3 V | VCCA do conversor | Conferir na placa real |
-| GPIO13 | RX do link | Conversor, canal 1 (lado A) | Sinal 3,3 V |
-| GPIO14 | TX do link | Conversor, canal 2 (lado A) | Sinal 3,3 V |
+| 3V3 | Saída de 3,3 V | Nada | Só para medir |
+| GPIO13 | RX do link | Ponto do meio do divisor (seção 3.3) | Sinal 3,3 V |
+| GPIO14 | TX do link | D17 do Mega, direto | Sinal 3,3 V |
 | U0R (GPIO3) | RX da programação | TX do adaptador USB-serial | Só para gravar |
 | U0T (GPIO1) | TX da programação | RX do adaptador USB-serial | Só para gravar |
 | GPIO0 | Modo de gravação | GND, só durante o reset de gravação | Também é o clock da câmera no firmware |
@@ -79,7 +79,8 @@ continuidade e tensões antes de seguir.
 Topologia de bancada:
 
 - Mega: alimentado pelo USB do computador.
-- ESP32-CAM: alimentada por uma fonte 5 V estável, no pino 5V da placa.
+- ESP32-CAM: alimentada por um regulador step-down (LM2596) ajustado em 5,0 V,
+  ligado à bateria de 12 V (a mesma da fechadura), no pino 5V da placa.
 - Entre o lado do Mega e o lado da CAM: **somente os GNDs** são unidos.
 - Não há ligação de 5 V entre o Mega e a CAM.
 
@@ -87,10 +88,12 @@ Fios:
 
 | De | Para |
 |---|---|
-| Fonte 5 V, (+) | 5V da ESP32-CAM |
-| Fonte 5 V, (-) | GND da ESP32-CAM |
+| Bateria 12 V, (+) | Entrada (+) do step-down |
+| Bateria 12 V, (-) | Entrada (-) do step-down, direto no borne da bateria |
+| Step-down, saída (+) | 5V da ESP32-CAM |
+| Step-down, saída (-) | GND da ESP32-CAM |
 | GND do Mega | GND da ESP32-CAM (ponto comum) |
-| GND do Mega | GND do conversor de nível |
+| GND do Mega | GND do divisor (resistor de 2 kΩ) |
 
 Observações:
 
@@ -103,9 +106,12 @@ Observações:
 
 Antes de energizar:
 
-- [ ] Ajuste a fonte para 5 V sem carga e meça antes de conectá-la à CAM.
+- [ ] Ajuste o step-down para 5,0 V sem carga (display do módulo e multímetro)
+      antes de conectá-lo à CAM. Saída acima de 5,2 V pode danificar a CAM.
+- [ ] O negativo do step-down vai direto ao borne da bateria, não pelo caminho
+      da corrente da fechadura.
 - [ ] Com multímetro em continuidade, confirme que todos os GNDs estão ligados
-      (Mega, CAM, conversor e, depois, o adaptador da seção 4).
+      (Mega, CAM, divisor e, depois, o adaptador da seção 4).
 - [ ] Nenhum fio de 12 V está próximo dos pinos de lógica.
 
 ### 3.2 ESP32-CAM
@@ -114,11 +120,10 @@ Fios:
 
 | De | Para |
 |---|---|
-| Fonte 5 V, (+) | 5V da CAM |
+| Step-down, saída (+) (5,0 V) | 5V da CAM |
 | GND da CAM | GND comum |
-| 3V3 da CAM | VCCA do conversor (lado A) |
-| GPIO13 da CAM | Canal 1, lado A do conversor (A1) |
-| GPIO14 da CAM | Canal 2, lado A do conversor (A2) |
+| GPIO13 da CAM | Ponto do meio do divisor (seção 3.3) |
+| GPIO14 da CAM | D17 do Mega, direto |
 
 Observações:
 
@@ -126,8 +131,7 @@ Observações:
   `Esp32CamRede.ino`). Não ligue nada neles.
 - GPIO0 é usado como clock da câmera. Deixe-o livre, exceto durante a gravação
   (seção 4). Se ficar em GND ao ligar, a placa entra em modo de gravação.
-- O pino 3V3 da placa fornece pouca corrente. Confirme na ficha se pode alimentar
-  o lado A do conversor.
+- O pino 3V3 da placa não alimenta nada neste projeto.
 - O Wi-Fi da CAM é 2,4 GHz. Uma rede que só tem 5 GHz não conecta.
 
 Antes de energizar:
@@ -137,44 +141,42 @@ Antes de energizar:
 - [ ] GPIO0 sem ligação para GND.
 - [ ] Flat da câmera encaixado com a CAM desligada.
 
-### 3.3 Conversor de nível (Mega <-> CAM)
+### 3.3 Divisor de tensão (Mega <-> CAM)
 
-Use um conversor de nível 3,3 V <-> 5 V com pelo menos dois canais e lado A
-(baixa tensão) e lado B (alta tensão). Um módulo de 8 canais tipo TXS0108E
-serve, se for o comprado. Confirme a serigrafia e a ficha do módulo.
+Decisão do dono (31/10/2026): o conversor de nível foi trocado por um divisor
+de tensão com resistores. Só o sentido Mega -> CAM precisa baixar a tensão.
 
-Pinos de alimentação e controle:
+Mega envia (D16, 5 V) -> CAM recebe (GPIO13, 3,3 V):
 
-| Pino | Ligação | Observação |
-|---|---|---|
-| VCCA | 3V3 da CAM | Lado de 3,3 V |
-| VCCB | 5V do Mega | Lado de 5 V |
-| OE | VCCA | Habilita os canais. Solto ou em GND, as saídas ficam desligadas (conferir na ficha) |
-| GND | GND comum | |
+| De | Para |
+|---|---|
+| D16 do Mega | Um terminal do resistor de 1 kΩ |
+| Outro terminal do 1 kΩ | Ponto do meio (uma fileira da protoboard) |
+| Ponto do meio | Um terminal do resistor de 2 kΩ (ou dois de 1 kΩ em série) |
+| Outro terminal do 2 kΩ | GND comum |
+| Ponto do meio | GPIO13 da CAM |
 
-Canais do link:
+CAM envia (GPIO14, 3,3 V) -> Mega recebe (D17):
 
-| Canal | Lado B (5 V, Mega) | Lado A (3,3 V, CAM) | Sentido |
-|---|---|---|---|
-| 1 | B1 <- D16 do Mega | A1 -> GPIO13 da CAM | Mega envia |
-| 2 | A2 <- GPIO14 da CAM | B2 -> D17 do Mega | CAM envia |
+| De | Para |
+|---|---|
+| GPIO14 da CAM | D17 do Mega, fio direto |
 
 Observações:
 
-- Conferir na ficha se OE habilita com nível alto e se a serigrafia dos pinos
-  bate com esta tabela.
-- O conversor precisa funcionar nos dois sentidos para UART. Um conversor só
-  para barramento I²C não serve.
-- Deixe os canais não usados sem ligação.
+- Com 5 V no D16, o ponto do meio fica em cerca de 3,3 V (5 V x 2 / 3).
+- O resistor de 2 kΩ precisa estar no GND. Sem ele, o GPIO13 recebe 5 V.
+- O nível alto mínimo do Mega é 3,0 V (0,6 x 5 V). Os 3,3 V da CAM ficam acima,
+  com pouca folga. Costuma funcionar; se o passo 6 falhar, este é o primeiro
+  suspeito.
+- Não use o 3V3 da CAM para nada neste projeto.
+- Alternativa com resistores de 330 Ω, porque o dono só tem 4 de 1 kΩ: 3 em série (~1 kΩ) no lugar do 1 kΩ e 6 em série (~2 kΩ) no lugar do 2 kΩ (mesma proporção).
 
 Antes de energizar:
 
-- [ ] Energizar os dois lados juntos, ou desconectar GPIO13 e GPIO14 antes de
-      energizar só um lado.
-
-Depois de energizar:
-
-- [ ] Medir VCCA (esperado 3,3 V) e VCCB (esperado 5 V).
+- [ ] Resistores conferidos (código de cores ou multímetro): 1 kΩ e 2 kΩ.
+- [ ] Ponto do meio medido perto de 3,3 V com o Mega ligado e a CAM ainda solta
+      (passo 4 da seção 5).
 
 ### 3.4 Teclado 4x4
 
@@ -292,8 +294,8 @@ Fios:
 | Buzzer (+) | 5V do Mega |
 | Buzzer (-) | Coletor do NPN |
 | Emissor do NPN | GND |
-| Base do NPN | Um terminal do resistor de 470 Ω |
-| Outro terminal do resistor de 470 Ω | D36 |
+| Base do NPN | Um terminal do resistor de 470 Ω (ou 330 Ω a 1 kΩ) |
+| Outro terminal do resistor de 470 Ω (ou 330 Ω a 1 kΩ) | D36 |
 | Base do NPN | Um terminal do resistor de 10 kΩ |
 | Outro terminal do resistor de 10 kΩ | GND (junto do emissor) |
 
@@ -306,6 +308,11 @@ Observações:
   enquanto o pino do Mega estiver indefinido.
 - Se o buzzer tiver circuito integrado próprio, confirme na ficha se aceita sinal de 5 V
   e se o disparo é ativo em HIGH. Faça essa conferência também se trocar o buzzer por outro modelo.
+- Resistor de base de 330 Ω a 1 kΩ também serve. A bancada usou 330 Ω no lugar do 470 Ω (corrente no D36 de cerca de 13 mA, em 02/11/2026).
+- Módulo de buzzer passivo de 3 pinos (como o módulo SainSmart `S V G` testado em 02/11/2026, que ficou em silêncio com nível fixo) não serve com o firmware atual, que só liga e desliga o D36. Um buzzer de 2 pernas ligado direto a 5 V e GND apitou contínuo: é ativo.
+- Teste rápido do circuito sem firmware: com o fio de teste ligado ao 5 V (no lugar do D36), o buzzer deve apitar. No GND, deve ficar em silêncio (não testado separadamente).
+- NPN que servem (conferir a pinagem na ficha): BC337, BC546 a BC550, 2N2222, 2N3904, S8050, C945, C1815. Só o BC546 foi testado na bancada.
+- PNP não servem (com PNP no lado alto a lógica inverte e o buzzer apitaria em repouso): BC327, BC557, 2N3906, S8550.
 - Avisos do firmware: três bipes curtos ao expirar o minuto sem abrir. Um bipe
   a cada 2 s após 5 minutos de porta aberta. Ver `BuzzerLogic.h`.
 - Com `LOCK_MODE=0`, o buzzer funciona normalmente. Só a fechadura fica desligada.
@@ -321,14 +328,20 @@ Fios (confira a ordem dos pinos na ficha da sua unidade antes de ligar):
 
 | De (Mega) | Para (DY50) |
 |---|---|
-| D18 (TX1) | RX do DY50 (via conversor, se a ficha pedir) |
-| D19 (RX1) | TX do DY50 (confira a ficha da unidade) |
-| 5V do Mega ou fonte separada | VCC do DY50 (só se a ficha aceitar; ver observações) |
-| GND | GND do DY50 |
+| D18 (TX1) | 1 kΩ, depois RX do DY50 (o RX tem dois 1 kΩ em série para GND) |
+| D19 (RX1) | TX do DY50, direto |
+| 3,3 V da fonte de protoboard MB102 (trilha vermelha de baixo; fonte de parede de 7 V) | 3V3 do DY50 (nunca 5 V nesta unidade) |
+| GND (trilha azul de cima, comum com o Mega) | GND do DY50 |
 
 Observações:
 
-- Ligue o DY50 só depois de concluir o roteiro de comunicação da seção 5 (passo 7).
+- Ligue o DY50 só depois de concluir o roteiro de comunicação da seção 5 (passo 7) (regra original; adiantada em 02/11/2026, ver a decisão abaixo).
+- Decisão de 02/11/2026: a ligação do DY50 foi adiantada, porque a CAM aguarda bateria e step-down e a ligação do DY50 não depende da CAM (ver `docs/HANDOFF.md`, seção 4).
+- Montagem usada em 02/11/2026 (verificada em hardware: `dy50=ok`): fonte de parede de 7 V (valor informado pelo dono; etiqueta não fotografada) com plugue P4 no DC-in da fonte de protoboard YwRobot MB102. A MB102 fica na ponta do lado do Mega; a saída de 3,3 V (trilha vermelha de baixo) alimenta o 3V3 do DY50. O GND da MB102 encosta na trilha azul de cima, comum com o Mega. Saída medida: 3,3 V (`003` no alicate, medição grosseira).
+- Cuidado com o jumper do lado das trilhas de cima da MB102: elas levam 5 V e GND do Mega. Esse jumper fica em OFF, não em 3.3. Em 02/11/2026 ele ficou em 3.3 por engano e foi corrigido. Antes de ligar a USB, medir: trilha de cima `000`, trilha de baixo `003`. O Mega segue alimentado só pela USB; nunca ligar o 5V do Mega na trilha de 3,3 V.
+- Protoboard: as trilhas de cima são cortadas no meio, perto da coluna 30. Usar só a metade esquerda.
+- Divisor do RX montado em 02/11/2026 (medido desligado): 1 kΩ entre as colunas 18 e 21 (D18 na coluna 18, RX do DY50 na coluna 21); 1 kΩ entre 21 e 24; 1 kΩ entre 24 e 27; jumper da coluna 27 à trilha azul de cima. Coluna 18 até GND = 3 kΩ; coluna 21 até GND = 2 kΩ. O cabo do DY50 foi emendado por conector branco a fios coloridos e jumpers.
+- Serigrafia deste clone trocada: a placa diz `RX1 18` e `TX1 19`. Medido com o firmware rodando e pinos livres: pino 18 = TX1 (repouso alto, `005`) e pino 19 = RX1 (`000`). Seguir os números, como no ATmega2560.
 - Não tire a alimentação do DY50 do 5V do Mega com o Mega alimentado só pelo USB
   antes de conferir o consumo do DY50 na ficha. Se a ficha ou a corrente disponível
   no USB não bastarem, use fonte separada com GND comum.
@@ -340,7 +353,7 @@ Observações:
   de 3,3 V. Meça ou confirme na ficha antes de ligar.
 - O UART do DY50 é 57600 bps (`Serial1` no firmware).
 - O RX do DY50 não deve receber os 5 V do D18 sem confirmação na ficha da unidade.
-  Se o DY50 for 3,3 V, use canais livres do conversor de nível.
+  Se o DY50 for 3,3 V, use um segundo divisor (1 kΩ e 2 kΩ) no D18, como na seção 3.3.
 - Se o nível for incompatível, use conversão de nível para UART. Itens sem uso
   ficam isolados.
 - Mensagens esperadas: "Falha memoria" bloqueia. "DY50 fora do ar" aparece
@@ -349,14 +362,19 @@ Observações:
   "Slot orfao limpo" / "Recoloque o dedo"; recoloque o dedo. "Slot DY orfao" só
   aparece se o apagamento falhar, o ID estiver fora da faixa ou o registro
   estiver corrompido; o cadastro para. Não apague a base de digitais.
+- Unidade do dono (rótulos lidos na placa em 02/11/2026): 6 pinos `GND`, `RX`, `TX`, `3V3`, `T_OUT` e `T_3V3`. Pela marcação 3V3, alimentar com 3,3 V e não com 5 V (inferência pela marcação; a ficha não foi conferida). `T_OUT` e `T_3V3` ficam isolados, sem uso.
+- Cabo com 6 fios vermelhos e conector de passo ~1 mm (JST SH/1.25), que não encaixa em jumper. Corte o conector da ponta solta, identifique cada fio por continuidade contra os rótulos da placa e solde jumpers: GND preto; 3V3 em cor exclusiva (não vermelha), marcada; TX e RX em cores distintas. Emenda feita em 02/11/2026: conector branco a fios coloridos e jumpers.
+- Ponto em aberto: a especificação oficial do Mega 2560 cita 50 mA para o pino 3.3V; o DY50 pede menos de 120 mA (pico menos de 140 mA). Não usar o pino 3.3V do Mega para o DY50; usar fonte de 3,3 V separada com GND comum (usada: MB102, ver acima; `docs/HANDOFF.md`, seção 4, continuação).
+- Divisor do RX (ligação montada em 02/11/2026, ver acima): D18 -> 1 kΩ -> RX do DY50; RX do DY50 -> dois de 1 kΩ em série -> GND. Procedimento antes de ligar TX e RX (em 02/11/2026 este passo foi pulado: a medição do TX do DY50 não foi executada, e o DY50 foi ligado mesmo assim): alimente só 3V3 e GND e meça o TX: esperado `002` ou `003` no alicate, que lê cerca de 1 V abaixo. Pare se der `004` ou mais.
 
 Antes de energizar:
 
 - [ ] Ficha da unidade lida: VCC, GND, TX, RX e faixa de tensão confirmados.
 - [ ] TX do DY50 medido ou confirmado em 3,3 V ou 5 V.
 - [ ] Se o TX for 3,3 V, confira na ficha do Mega que o nível alto é reconhecido.
-      Havendo dúvida, use conversor.
-- [ ] Se o RX do DY50 não aceitar 5 V, o sinal D18 passa por conversor.
+      O nível alto mínimo do Mega é 3,0 V; 3,3 V costuma funcionar, com pouca folga.
+- [ ] Se o RX do DY50 não aceitar 5 V, o sinal D18 passa por divisor (seção 3.3).
+- [ ] Jumper do lado das trilhas de cima da MB102 em OFF; medidos `000` (trilha de cima) e `003` (trilha de baixo) antes de ligar a USB.
 
 ### 3.10 Fechadura 12 V / 2 A com driver
 
@@ -424,7 +442,7 @@ Passos:
    3V3. Meça a tensão do TX em repouso antes de ligar. Deve estar perto de 3,3 V.
    Se estiver em 5 V, pare.
 2. **Nunca ligue o 5V/VCC do adaptador ao 5V da CAM.** A CAM é sempre alimentada
-   pela fonte 5 V da seção 3.1.
+   pelo step-down da seção 3.1, ou pela base ESP32-CAM-MB (ver abaixo).
 3. Com a CAM desligada, ligue GPIO0 ao GND.
 4. Pressione o botão RST da placa, ou religue a alimentação. A placa entra em modo de gravação.
 5. Grave pelo IDE ou pelo esptool, conforme o procedimento do seu ambiente.
@@ -440,6 +458,21 @@ Observações:
   bater com a configuração do servidor.
 - Não comite o `Config.h` local nem coloque credenciais no repositório.
 
+Adaptador do dono (31/10/2026): USB-serial PL2303, pinos `3V3`, `TXD`, `RXD`,
+`GND`, `5V`; no Mac aparece como `/dev/cu.usbserial-10`. Use a tabela acima (TXD
+no U0R, RXD no U0T, GND no GND). Os pinos `3V3` e `5V` do adaptador ficam soltos,
+salvo decisão do dono (ver `docs/HANDOFF.md`, seção 7).
+
+Alternativa, se um dia for usada a base ESP32-CAM-MB (conferir no produto):
+
+- A CAM encaixa por cima da base. A base alimenta a CAM pela micro-USB e já liga
+  a serial em 3,3 V. Não precisa dos fios da tabela acima.
+- Antes de encaixar, desligue o step-down e solte da CAM os fios do 5V, do GND,
+  do GPIO13 e do GPIO14. Nunca use a base USB e o step-down ao mesmo tempo.
+- Para gravar: segure o botão IO0 da base, pressione o RST da CAM, solte o IO0 e
+  grave pelo IDE com a placa "AI Thinker ESP32-CAM". Depois, pressione o RST.
+- A medição do passo 1 (TX em 3,3 V) não se aplica à base.
+
 ---
 
 ## 5. Roteiro mínimo de bancada
@@ -453,13 +486,15 @@ Use `LOCK_MODE=0`, com a fechadura e o driver desconectados. Siga a ordem.
 
 ### Passo 2: CAM sozinha
 
-- Ligue GNDs, fonte 5 V no 5V da CAM e, depois, meça 5V e 3V3.
+- Ligue GNDs, step-down (5,0 V) no 5V da CAM e, depois, meça 5V e 3V3.
 - Grave a CAM pela seção 4.
 - Monitor a 115200. Mensagens esperadas:
   - `CAM boot <id> camera=ok`
   - `CAM wifi conectado <ip>` (depois que a rede subir)
 - Com `CAM wifi conectado`, meça 5V e 3V3 de novo, porque o Wi-Fi puxa picos de corrente.
   Abaixo de cerca de 4,75 V no 5V, a fonte ou o cabo não entrega corrente suficiente.
+  Com o alicate de resolução 1 V esta leitura não é confiável: observe também se
+  aparece mensagem de brownout no monitor.
 - Se aparecer `camera=falha` ou `CAM: camera falhou (...)`, pare e confira a câmera.
 - Se aparecer mensagem de brownout (ESP-IDF; confira no monitor), a fonte ou o
   cabo não está entregando corrente suficiente.
@@ -488,22 +523,20 @@ Use `LOCK_MODE=0`, com a fechadura e o driver desconectados. Siga a ordem.
   aberto no boot soma forced_open e falha de memória soma storage_error): a fila
   fica em RAM e o reset a perde. Isso é esperado.
 
-### Passo 4: conversor sem sinais
+### Passo 4: divisor sem a CAM
 
-- Desligue tudo. Ligue: VCCB no 5V do Mega, VCCA no 3V3 da CAM, OE em VCCA, GNDs juntos.
-  Sem nenhum fio em A1, A2, B1, B2 nem no DY50.
-- Ordem de energização: energize o Mega (lado 5 V, VCCB) primeiro ou junto com a
-  CAM. Nunca energize só a CAM com o Mega desligado. Confira na ficha do conversor
-  a relação VCCA <= VCCB.
-- Meça VCCA (3,3 V) e VCCB (5 V).
+- Desligue tudo. Monte o divisor na protoboard (seção 3.3): D16 -> 1 kΩ -> ponto
+  do meio -> 2 kΩ -> GND. A CAM fica solta.
+- Ligue o Mega pelo USB e meça o ponto do meio x GND: esperado perto de 3,3 V
+  (TX em repouso). Se estiver perto de 5 V, pare: o 2 kΩ não está no GND.
 
 ### Passo 5: Mega envia para a CAM
 
 - Desligue tudo antes de mexer nos fios.
-- Ligue só D16 ao canal 1 (B1), com A1 solto. Energize e meça A1 x GND: esperado
-  perto de 3,3 V. Se estiver perto de 5 V, pare e confira VCCA, VCCB e OE.
-- Desligue tudo. Ligue A1 a GPIO13. Energize e meça GPIO13 x GND: esperado perto
-  de 3,3 V. Nunca perto de 5 V.
+- Ligue o ponto do meio do divisor ao GPIO13 da CAM. GNDs do Mega, do step-down e
+  da CAM juntos.
+- Energize o Mega e a CAM e meça GPIO13 x GND: esperado perto de 3,3 V. Nunca
+  perto de 5 V.
 - Com o servidor parado, a CAM deve imprimir uma destas duas mensagens. As duas
   começam com `Fila CAM:` e terminam com `item mantido para reenvio`:
   - Wi-Fi caído: `Fila CAM: rede indisponivel; item mantido para reenvio`
@@ -513,9 +546,9 @@ Use `LOCK_MODE=0`, com a fechadura e o driver desconectados. Siga a ordem.
 ### Passo 6: CAM envia para o Mega
 
 - Desligue tudo antes de mexer nos fios.
-- Ligue GPIO14 a A2 (canal 2), com B2 solto. Energize e meça B2 x GND: esperado
-  perto de 5 V em repouso.
-- Desligue tudo. Ligue B2 a D17 e energize.
+- Com a CAM ligada e o GPIO14 ainda solto, meça GPIO14 x GND: esperado perto de
+  3,3 V em repouso.
+- Desligue tudo. Ligue o GPIO14 direto ao D17 e energize.
 - `STATUS` deve ir a `queued=0`, com `dropped=0` e `replies_dropped=0`. Isso prova
   que a CAM aceitou e enfileirou o evento (a CAM envia o ACK ao enfileirar, antes
   de qualquer HTTP). Não prova que o servidor recebeu: isso acontece até com o

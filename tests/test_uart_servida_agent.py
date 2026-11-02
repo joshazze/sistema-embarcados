@@ -48,6 +48,9 @@ void createUser1() {
 '''
 # LCD simulado para displayTick: conta caracteres escritos, sem falhas de barramento.
 DISPLAY_MOCKS = r'''
+#define F(s) s
+#define LCD_SERIAL_MIRROR 1
+struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
 bool lcdReady=true;
 struct FakeWire { bool failed=false; void clearWireTimeoutFlag() { failed=false; } bool getWireTimeoutFlag() { return failed; } } Wire;
 struct FakeLCD { int writes=0; void setCursor(int,int) {} void write(uint8_t) { ++writes; } void init() {} void backlight() {} } lcd;

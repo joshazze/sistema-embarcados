@@ -10,3 +10,5 @@ constexpr bool RGB_COMMON_ANODE = false;
 const byte ROW_PINS[4] = {22,23,24,25}, COL_PINS[4] = {26,27,28,29};
 constexpr uint8_t MAX_USERS = 100;
 constexpr uint32_t ENTRY_MS = 60000, OPEN_MS = 300000, UI_TIMEOUT_MS = 60000;
+// Espelho do LCD na serial USB: imprime "LCD| <linha1> | <linha2>" quando o texto muda (ativo por padrão, mesmo sem LCD).
+// #define LCD_SERIAL_MIRROR 0  // desliga o espelho do LCD na serial USB
