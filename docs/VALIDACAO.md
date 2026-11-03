@@ -6,7 +6,7 @@ LCD) e a matriz do teclado 4x4 por continuidade (30/10/2026, à noite): placa gr
 AUTH e STATUS pela USB, tensões em D16 e D35 medidas. Em 02/11/2026 (sessão 4 e continuação): DY50 alimentado pela MB102 e comunicando, cadastro, acessos pela digital e pela senha, buzzer pelo firmware e espelho do LCD na serial; teclado 4x4
 soldado e lido pelo Mega (coluna C4 verificada no mesmo dia), diagnóstico das 16 teclas (sketch DiagTeclado), circuito do buzzer com BC546 e resistores medidos. O teclado não foi
 lido pelo Mega em 30/10/2026 (queued continuou 1 com a ligação provisória); isso foi resolvido
-em 02/11/2026. Não foi feito: comunicação real com a CAM, LCD, LED RGB (módulo ausente) e fechadura. Em 02/11/2026 a porta forçada foi observada em hardware, e a porta aberta por 5 min (bipes a cada 2 s) foi relatada pelo dono (ver Registros). Os ensaios de bancada estão em [TESTES.md](TESTES.md).
+em 02/11/2026. Não foi feito: comunicação real com a CAM, LCD, LED RGB (módulo ausente) e fechadura. Em 02/11/2026 a porta forçada foi observada em hardware, e a porta aberta por 5 min (bipes a cada 2 s) foi relatada pelo dono (ver Registros). Os ensaios de bancada estão em [TESTES.md](TESTES.md). Atualização 03/11/2026 (tarde): gravação, boot e Wi-Fi da CAM verificados em hardware (ver Registros).
 
 Níveis de evidência:
 
@@ -91,6 +91,16 @@ Níveis de evidência:
 | ESP32-CAM: ponte pelo segundo Mega | 03/11/2026 | Dono informa a fiação feita, com o mesmo método do diagrama 02: RESET -> GND no Mega 2; 5 V e GND só para gravar; IO0-GND; divisor 3+6 x 330 Ω; U0R só depois de medir "002"; U0T no pino 1 | Medição do ponto do meio não informada. Nada gravado na CAM. Sem boot da CAM | não verificado |
 | Rede da CAM: hotspot do iPhone | 03/11/2026 | Estado de rede do Mac informado nesta sessão: hotspot do iPhone em 5 GHz, Mac só com IPv6 (IPv4 192.0.0.2/32 via clat46) | A CAM (2,4 GHz, IPv4 em SERVER_URL) provavelmente não alcança o servidor assim (inferência). A testar: iPhone em "Maximizar Compatibilidade"; IP do Mac na faixa 172.20.10.x; servidor com `--host 0.0.0.0` | não verificado (inferência) |
 | Ensaios previstos não executados (03/11/2026) | 03/11/2026 | Não executados nesta data | Wokwi com LCD paralelo (Docker desligado); gravação e boot da CAM pela ponte do segundo Mega; medição do ponto do meio da ponte; LCD em bancada; recuperação automática do DY50 (esperar 15 s e STATUS); divisor do DY50 nas colunas novas; ligação do teclado (refeita pela tabela de 02/11) e as 16 teclas de novo; rede da CAM em 2,4 GHz. Lado de cima da YwRobot: configuração em uso não confirmada (a confirmar com o dono) | não verificado |
+| ESP32-CAM: gravação pela ponte do segundo Mega (115200) | 03/11/2026 (tarde) | Eco do Mega 2 (pino 0 com pino 1, RESET no GND, 115200): texto de volta. Monitor com IO0 em GND e RST: `boot:0x3 (DOWNLOAD_BOOT...)` e `waiting for download`. IDE falhou após "Changing baud rate to 460800". arduino-cli com `upload.speed=115200`: cerca de 60 s, 4 partes com "Hash of data verified". Chip ESP32-D0WD-V3 rev 3.1, cristal 40 MHz | CAM gravada | verificado em hardware |
+| ESP32-CAM: divisor da ponte (pino 0 -> meio -> GND) | 03/11/2026 (tarde) | Medição com multímetro Fluke 17B+ (leitura direta). Primeira cadeia mal encaixada: meio ~0,33 V; coluna 16 -> GND 985 Ω. Pino 0 direto no meio (0 em cima): 4,4 V. Cadeia refeita: 16 -> 34 = 2 kΩ, 2 x 330 Ω em cima | 0 em cima reprovado (acima de 3,6 V). Meio com 2 em cima após remontagem: não medido; estimativa ~3,3 V (4,4 x 1980/2640) | verificado em hardware (leituras); 2 em cima: não verificado; estimativa para ~3,3 V |
+| ESP32-CAM: boot e Wi-Fi após gravação | 03/11/2026 (tarde) | Monitor a 115200 com IO0 solto | `CAM boot ... camera=ok` e `CAM wifi conectado` | verificado em hardware |
+| Rede de teste da CAM (iPhone USB + Compartilhamento de Internet) | 03/11/2026 (tarde) | iPhone no cabo; Compartilhamento de "iPhone USB" para Wi-Fi em 2,4 GHz; Mac em 192.168.2.1; CAM em 192.168.2.2. Hotspot só IPv6 (192.0.0.2/32, clat46) verificado antes | Painel "ESP32 conectado" (16:56) | verificado em hardware (hotspot IPv6: verificado em host) |
+| Correção setSleep: conexão contínua | 03/11/2026 (tarde) | `WiFi.setSleep(false)` após `WiFi.mode(WIFI_STA)` em networkTask(); gravação depois da correção | Painel "ESP32 conectado" (último contato 17:32:24); ping ~4 ms; conexões contínuas; banco atualizando. Consumo da CAM não medido | verificado em hardware |
+| Correção setSleep: suíte Python | 03/11/2026 (tarde) | `CONTROLE_TEST_LIBS=<pasta das libs de teste> CONTROLE_TEST_STRICT=1 python3 -m unittest discover -s tests -q` | 152 testes, 151 OK, 1 falha pré-existente em `test_deeply_nested_json_reports_400` | verificado em host |
+| Correção setSleep: compilação da CAM | 03/11/2026 (tarde) | `esp32:esp32:esp32cam` sobre Config.example.h | 1055133 B de flash | compilado |
+| Correção setSleep: revisão independente | 03/11/2026 (tarde) | Sonnet, leitura do diff | Aprovada como mitigação de baixo risco | análise de código |
+| NTP na rede do Mac | 03/11/2026 (tarde) | Sincronização do relógio na rede de teste | NTP falha (rede sem internet IPv4) | verificado em hardware (falha); causa: inferência |
+| Foto da CAM ao servidor e UART com o Mega de uso | 03/11/2026 (tarde) | Não executado | Pendente | não verificado |
 
 Textos do LCD alterados (MEGA-07). Antigo -> novo, conforme `firmware/MegaControlador/MegaControlador.ino`:
 
@@ -141,6 +151,7 @@ CLI não executa. Para compilar, usou-se um ctags ARM64 indicado pela propriedad
 
 ## Limites
 
+- Atualização 03/11/2026 (tarde): gravação e boot da CAM, Wi-Fi e conexão contínua com o servidor na rede de teste verificados em hardware. Não verificados: fluxo de foto CAM -> servidor, UART com o Mega de uso, NTP (sem internet IPv4 na rede do Mac) e fechadura. Os itens abaixo são do registro anterior.
 - Além do passo 3 da bancada, da matriz do teclado, da leitura do teclado pelo Mega, do circuito do buzzer, do DY50 comunicando, do cadastro, dos acessos pela digital e pela senha e do buzzer pelo firmware, porta forçada e porta aberta por tempo (por relato do dono) (02/11/2026, ver Registros), nenhum teste físico, gravação da CAM, LCD, UART Mega-CAM, câmera, Wi-Fi/NTP real ou fechadura foi feito.
 - Buzzer: o acionamento pelo firmware foi verificado em 02/11/2026 (EntryExpired, 3 bipes, ouvido pelo dono). OpenTooLong foi exercitado em 02/11/2026 por relato do dono (bipe a cada 2 s; sem STATUS registrado; ver Registros).
 - Espelho do LCD na serial: sai sem AUTH e mostra os mesmos textos do LCD (por exemplo "Acesso liberado | ID n"); as linhas `LCD|` podem se intercalar com respostas de comando (revisão de 02/11/2026).

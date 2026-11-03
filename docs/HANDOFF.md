@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 03/11/2026, sessão 5; sessões 4 e continuação em 02/11/2026, bancada)
+# Handoff: controle de acesso ESP32 (estado em 03/11/2026, sessão 5; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -53,6 +53,7 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
   `Config.h`, `*.sqlite3` e `__pycache__` não entram no commit.
 - Commits sem linha `Co-Authored-By`.
 - 03/11/2026: as mudanças da sessão 5 (LCD em 4 bits, SHOW_TYPED_DIGITS, bipe da porta forçada, testes, Wokwi e docs) foram commitadas em `e6a9263` e enviadas para origin/main a pedido do dono.
+- 03/11/2026 (tarde): alterados `firmware/Esp32CamRede/Esp32CamRede.ino` (`WiFi.setSleep(false);` logo após `WiFi.mode(WIFI_STA)` em networkTask()) e `tests/test_camera_network.py` (`setSleep` no mock), commitado no commit da tarde de 03/11 (ver git log).
 
 ## 4. O que foi feito em 30/10/2026
 
@@ -326,6 +327,63 @@ Bancada com o dono e alterações de código ainda não commitadas (seção 3). 
 - Rede da CAM: o Mac está num hotspot do iPhone em 5 GHz e só com IPv6 (IPv4 192.0.0.2/32 via clat46). A CAM (2,4 GHz, IPv4 em SERVER_URL) provavelmente não alcança o servidor assim (inferência). Para testar: iPhone em "Maximizar Compatibilidade"; confirmar o IP do Mac na faixa 172.20.10.x e usar esse IP na URL do `Config.h` da CAM; servidor com `--host 0.0.0.0` (não verificado).
 - Skill `/sistema-embarcado` (do dono, fora do repositório) ainda lista "LiquidCrystal I2C 1.1.2" entre as bibliotecas do Mega; deve passar a LiquidCrystal 1.0.7. Não alterada: depende de autorização do dono.
 
+### Sessão 5, continuação (03/11/2026, tarde): ESP32-CAM gravada e na rede
+
+Bancada com o dono. Níveis em docs/VALIDACAO.md (registros de 03/11/2026, tarde). O agente não abriu nenhum `Config.h`; nenhum nome ou senha de Wi-Fi, PIN ou chave foi registrado.
+
+**Ponte pelo segundo Mega (verificado em hardware)**
+- Porta do Mega 2: `/dev/cu.usbmodem101` ou `usbmodem1101` (o nome muda ao replugar). Chip USB 16U2, não o CH340 do Mega 1. Conferir com `ls /dev/cu.usbmodem*` antes de cada tentativa.
+- Ligação: RESET -> GND no Mega 2; 5 V e GND do Mega 2 -> 5 V e GND da CAM (só para gravar); IO0 -> GND na CAM; pino 0 (RX0) -> 2 x 330 Ω -> meio (U0R) -> 6 x 330 Ω -> GND; U0T da CAM -> pino 1 direto.
+- Eco do Mega 2 (jumper pino 0 com pino 1, RESET no GND, monitor 115200): o texto voltou. Verificado em hardware.
+
+**Divisor da ponte (verificado em hardware, com ressalvas)**
+- Primeira cadeia (3 + 6 x 330 Ω) mal encaixada: meio ~0,33 V; coluna 16 -> GND = 985 Ω (só 3 resistores contando). Refeita.
+- Pino 0 direto no meio (0 resistores em cima): 4,4 V, acima de 3,6 V. O pino 0 desta placa tem resistência interna pequena; "0 resistores em cima" NÃO serve.
+- Cadeia refeita: coluna 16 -> 34 = 2 kΩ; usados 2 x 330 Ω em cima.
+- Medido com o multímetro Fluke 17B+ (leitura direta): as leituras desta tarde (0,33 V, 4,4 V, 985 Ω e 2 kΩ), não o alicate BOMVINK. Estimativa com 2 em cima: 4,4 V x 1980 / (660 + 1980) ~ 3,3 V (estimativa, não medida).
+- Não verificado depois da remontagem: medir o meio com 2 em cima antes de reutilizar (alvo 2,5 a 3,3 V).
+
+**Gravação (verificado em hardware)**
+- Monitor com IO0 em GND e RST: `rst:0x1 (POWERON_RESET),boot:0x3 (DOWNLOAD_BOOT...)` e `waiting for download`.
+- Chip ESP32-D0WD-V3 rev 3.1, cristal 40 MHz.
+- Pela IDE falhou após "Changing baud rate to 460800" (a ponte não aguenta). Funcionou a 115200 pela linha de comando (cerca de 60 s, 4 partes com "Hash of data verified"):
+  - compilar: `arduino-cli compile --fqbn esp32:esp32:esp32cam --build-path /tmp/camb firmware/Esp32CamRede`
+  - gravar: `arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn esp32:esp32:esp32cam --input-dir /tmp/camb --upload-property upload.speed=115200 firmware/Esp32CamRede`
+  - arduino-cli em "/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli".
+  - Antes: IO0 em GND e RST; fechar o Monitor Serial da IDE (ele prende a porta).
+- `/tmp/camb` contém segredos compilados: apagada pelo orquestrador após cada gravação.
+
+**Boot e rede (verificado em hardware, salvo onde indicado)**
+- Boot: `CAM boot ... camera=ok` e `CAM wifi conectado <IP>`.
+- O hotspot do iPhone é só IPv6 (Mac recebe 192.0.0.2/32, clat46; verificado em host), então a CAM não o usa direto. Solução adotada: iPhone no cabo USB e Compartilhamento de Internet do macOS de "iPhone USB" para Wi-Fi em 2,4 GHz (canal 11). Mac em 192.168.2.1 e CAM em 192.168.2.2. O dono ajustou no Config.h local da CAM a rede e o SERVER_URL http://192.168.2.1:8080 (valores não registrados).
+- Na rede de casa o IP do Mac mudou de .17 para .20 ao reconectar: o SERVER_URL da CAM precisa acompanhar.
+- Painel: "ESP32 conectado" (16:56).
+
+**Problema e correção (verificado em hardware; suíte em host; análise de código)**
+- Sintoma: na rede do Mac a CAM fazia 2 requisições e parava (sem ping, sem heartbeat), ainda dizendo "conectado".
+- Correção: `WiFi.setSleep(false);` logo após `WiFi.mode(WIFI_STA)` em networkTask() (`firmware/Esp32CamRede/Esp32CamRede.ino`) e `setSleep` no mock de `tests/test_camera_network.py`.
+- Depois da gravação: painel "ESP32 conectado" (último contato 17:32:24), ping ~4 ms, conexões contínuas, banco do servidor atualizando. Verificado em hardware.
+- Suíte: 152 testes, 1 falha pré-existente (`test_server` deeply_nested). Verificado em host.
+- Compilação (sobre Config.example.h): 1055133 B de flash. Compilado.
+- Revisão Sonnet: aprovada como mitigação de baixo risco. Análise de código.
+- Consumo da CAM sobe (Wi-Fi sem economia de energia). Não medido: usar 5 V firme.
+
+**Pendências novas desta continuação**
+- (a) Relógio sem sincronização: a rede do Mac não tem internet IPv4 e o NTP falha (falha verificada em hardware; causa: inferência). Os eventos sairão sem horário real até decidir: o servidor fornece a hora, ou rede com internet.
+- (b) PIN de administrador e chave do dispositivo foram expostos no chat em 03/11/2026 (valores não registrados). Trocar ADMIN_PIN no Config.h do Mega 1, DEVICE_KEY no Config.h da CAM e no comando do servidor. Não verificado.
+- (c) Medir o meio do divisor (2 em cima) antes de reusar.
+- (d) Montagem de uso da CAM no Mega 1: ver seção 9, passo 3.
+- (e) Servidor no Terminal do Mac, com os valores no ambiente (não colar no chat): ver checklist abaixo.
+- Desenhos de apoio na Mesa do dono, fora do repositório e não versionados: mega2-divisor-cam.png, divisor-protoboard.png, ponte-mega2-*.png.
+
+#### Como religar a rede de testes (iPhone + Mac)
+1. Plugar o iPhone no Mac pelo cabo USB, iPhone desbloqueado; Ajustes > Acesso Pessoal > "Permitir Que Outros Acessem" ligado (tocar "Confiar" se pedir).
+2. No Mac: System Settings > General > Sharing > Internet Sharing (i): "Share your connection from" = o "iPhone USB" que estiver ativo (há dois na lista; em 03/11 foi en8); "To devices using" = só Wi-Fi; Wi-Fi Options: canal 1, 6 ou 11 (2,4 GHz, não "Automatic"), WPA2/WPA3 Personal; ligar Internet Sharing. Para mudar opções, desligar o Internet Sharing antes (o botão Wi-Fi Options fica cinza com ele ligado).
+3. Conferir: `ifconfig bridge100 | grep "inet "` deve mostrar 192.168.2.1.
+4. Servidor no Terminal do Mac: `cd ~/Desktop/controle-acesso-esp32 && ADMIN_PIN='...' DEVICE_KEY='...' python3 servidor/server.py --host 0.0.0.0 --port 8080` (valores só no Terminal; os `...` são placeholders). Painel: http://127.0.0.1:8080. No Mac do dono existe o atalho `~/Desktop/rodar-servidor-controle.command` (fora do repositório, com os valores locais); dois cliques sobem o servidor. Quem não tiver o atalho usa o comando com os próprios valores.
+5. CAM: IO0 solto, apertar RST; esperado "CAM wifi conectado 192.168.2.x"; no painel "ESP32 conectado" e último contato atualizando a cada ~10 s. Conferência no Mac: `ping 192.168.2.2`.
+- Ao desconectar o iPhone: a rede 192.168.2.x cai e a CAM perde o servidor (nada estraga; o firmware continua gravado). Para o Mac voltar à internet normal, desligar o Internet Sharing e reconectar o Wi-Fi do Mac à rede de casa. Na rede de casa o IP do Mac muda e o SERVER_URL da CAM teria de acompanhar; por isso a rede de testes padrão é a do Mac (192.168.2.1 fixo).
+
 ## 5. Verificação (30/10/2026, 02/11/2026 e 03/11/2026)
 
 | Verificação | Resultado | Evidência |
@@ -362,6 +420,16 @@ Bancada com o dono e alterações de código ainda não commitadas (seção 3). 
 | ESP32-CAM: compilação e gravação, 02/11/2026 | Compilada: 1055085 B de flash e 60608 B de RAM (IDE); 1054989 B e 60608 B (arduino-cli com `--build-path`). Gravação NÃO concluída: chip ESP32-D0WD-V3 identificado; uma tentativa gravou bootloader e partições e falhou em boot_app0; as demais falharam no início ou ao trocar de velocidade | compilado; gravação não verificada (chip identificado em hardware) |
 | Suíte Python (sessão 5), 03/11/2026: `CONTROLE_TEST_LIBS=<pasta das libs de teste> CONTROLE_TEST_STRICT=1 python3 -m unittest discover -s tests -q`. A pasta das libs de teste é temporária; se não existir, regenere com `python3 scripts/bootstrap-test-libs.py` (ver seção 6). | 152 testes: 151 OK, 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (a mesma em worktree limpo do HEAD `f44a926`; não investigada) | verificado em host |
 | Mega `arduino:avr:mega`, arduino-cli, 03/11/2026 (sobre `Config.example.h`, cópia de trabalho) | 37524 B de flash, 4327 B de RAM, 0 avisos | compilado |
+| CAM gravada pela ponte do Mega 2, 115200, 03/11/2026 (tarde) | 4 partes com "Hash of data verified", cerca de 60 s; eco do Mega 2 OK; IDE falhou em 460800 | verificado em hardware |
+| Divisor da ponte, 03/11/2026 (tarde) | 0 em cima: 4,4 V (medido com o multímetro Fluke 17B+, leitura direta; reprovado). 2 em cima: não medido após remontagem (estimativa ~3,3 V) | verificado em hardware (leituras); 2 em cima: não verificado |
+| Boot e Wi-Fi da CAM, 03/11/2026 (tarde) | `CAM boot ... camera=ok`; `CAM wifi conectado` | verificado em hardware |
+| Rede de teste (iPhone USB + Compartilhamento), 03/11/2026 (tarde) | Painel "ESP32 conectado" (16:56) | verificado em hardware |
+| Correção setSleep: conexão contínua, 03/11/2026 (tarde) | Ping ~4 ms, último contato 17:32:24, conexões contínuas, banco atualizando | verificado em hardware |
+| Correção setSleep: suíte Python, 03/11/2026 (tarde) | 152 testes, 151 OK, 1 falha pré-existente em `test_deeply_nested_json_reports_400` | verificado em host |
+| Correção setSleep: compilação, 03/11/2026 (tarde) | 1055133 B de flash (sobre Config.example.h) | compilado |
+| Correção setSleep: revisão independente (Sonnet), 03/11/2026 (tarde) | Aprovada como mitigação de baixo risco | análise de código |
+| NTP na rede do Mac, 03/11/2026 (tarde) | Falha (rede sem internet IPv4) | verificado em hardware (falha); causa: inferência |
+| Foto da CAM ao servidor e UART com o Mega de uso, 03/11/2026 (tarde) | Não executado | não verificado |
 
 Os mesmos números estão registrados em docs/VALIDACAO.md.
 
@@ -423,6 +491,7 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 - Espelho do LCD na serial: o Mega imprime `LCD| <linha 1> | <linha 2>` sempre que o texto do LCD muda, inclusive sem LCD ligado (`LCD_SERIAL_MIRROR`, padrão 1; pode ser 0 no `Config.h` local). Senhas aparecem só como `*`. Sai sem AUTH, e as linhas podem se intercalar com respostas de comando. Use para acompanhar cadastro e acesso sem display.
 - Pinos do clone Mega: a serigrafia desta placa diz "RX1 18" e "TX1 19", mas medido: pino 18 = TX1 e pino 19 = RX1 (como no ATmega2560). Seguir os números. Vale para o DY50: TX do DY50 no D19; D18 no RX pelo 1 kΩ.
 - Alicate amperímetro BOMVINK: só 600 V DC (resolução 1 V) para tensão contínua; continuidade sem apito para contatos de teclado (a leitura muda ao apertar a tecla). Pontas: preta em COM, vermelha em VΩ. Usado também para medir resistores (02/11/2026).
+- Multímetro Fluke 17B+: o instrumento para medir divisores de tensão (leitura direta). Nas medições de divisor, usar este e não o alicate BOMVINK.
 
 - ESP32-CAM (02/11/2026): comandos do arduino-cli. Os caminhos reais ficam em pastas de trabalho fora do repositório. Trocar os marcadores `<...>` pelos caminhos. A pasta de build contém os segredos do `Config.h` local e deve ser apagada ao fim.
   1. Compilar, sem gravar, sobre a cópia do sketch `firmware/Esp32CamRede` feita pelo dono em pasta fora do repositório (com `--build-path` para pasta fora do repositório):
@@ -437,19 +506,26 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 ## 7. Pendências abertas (priorizadas)
 
 Bancada (bloqueios de material). Inventário completo e conferências em `docs/MATERIAIS.md`, "Situação do material do dono (31/10/2026)".
+- Atualizações de 03/11/2026 (tarde, seção 4, "Sessão 5, continuação"):
+  - (a) Relógio sem sincronização: decidir (servidor fornece a hora, ou rede com internet IPv4 para NTP). Pendente.
+  - (b) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor): expostos no chat em 03/11/2026. Pendente, prioritário.
+  - (c) Medir o meio do divisor da ponte com 2 em cima antes de reusar. Pendente.
+  - (d) Montagem de uso da CAM no Mega 1 (D16 -> divisor -> IO13; IO14 -> D17; 5 V da CAM pelo pino 5V; lado de cima da YwRobot a confirmar). Pendente.
+  - (e) Servidor no Terminal do Mac com ADMIN_PIN e DEVICE_KEY no ambiente, e teste fim a fim. Pendente.
+  - CAM gravada, boot e rede: verificados em hardware (seção 4, continuação). Este item substitui os de CAM abaixo.
 - Atualizações de 03/11/2026 (sessão 5, seção 4):
   - Confirmar o lado de cima da YwRobot em uso (OFF com 5 V do Mega nas trilhas, ou jumper em 5 V sem o fio 5 V do Mega; nunca os dois). A confirmar com o dono.
   - DY50: falhas intermitentes (`dy50=indisponivel`). Testar a recuperação automática (com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS); firmar a emenda do cabo (causa provável: inferência). Medir o divisor nas colunas novas: a leitura de 110k de 03/11 nas colunas antigas contradiz os 3 kΩ de 02/11, e a causa não foi identificada.
   - Teclado 4x4: refazer a ligação pela tabela de 02/11 (C1 a C4 = pinos 1 a 4 = D26 a D29; R1 a R4 = pinos 5 a 8 = D22 a D25) e conferir as 16 teclas. Não verificado.
   - LCD 1602 em 4 bits: ligar pela MONTAGEM 3.5, conferir que os pinos 1 e 2 do LCD não estão em curto (a leitura não pode dar 0) e ajustar o contraste no potenciômetro. Não verificado.
   - Espelho com os dígitos digitados: `#define SHOW_TYPED_DIGITS 1` no `Config.h` local (só bancada) e regravação do Mega 1. Não verificado.
-  - CAM pela ponte do segundo Mega: medir o ponto do meio antes de ligar o U0R; gravar; ver o boot (`CAM boot ... camera=ok`, `CAM wifi conectado`). Não verificado.
-  - Rede da CAM: hotspot do iPhone em 5 GHz e Mac só com IPv6 (inferência: a CAM não alcança o servidor como está). Testar com 2,4 GHz ("Maximizar Compatibilidade"), usar o IP do Mac na faixa 172.20.10.x na URL do `Config.h` da CAM e subir o servidor com `--host 0.0.0.0`. Não verificado.
+  - CAM pela ponte do segundo Mega: medir o ponto do meio antes de ligar o U0R; gravar; ver o boot (`CAM boot ... camera=ok`, `CAM wifi conectado`). Superado em 03/11/2026 (tarde): gravada, boot e rede verificados (seção 4, continuação).
+  - Rede da CAM: hotspot do iPhone em 5 GHz e Mac só com IPv6 (inferência: a CAM não alcança o servidor como está). Testar com 2,4 GHz ("Maximizar Compatibilidade"), usar o IP do Mac na faixa 172.20.10.x na URL do `Config.h` da CAM e subir o servidor com `--host 0.0.0.0`. Superado em 03/11/2026 (tarde): rede de teste do Mac em 192.168.2.x, painel conectado (seção 4, continuação; checklist na seção 9).
   - Wokwi com LCD paralelo: rodar a simulação quando o Docker estiver ligado. Não verificado.
   - Investigar a falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (também ocorre no HEAD `f44a926` limpo).
   - Skill `/sistema-embarcado` (fora do repositório, do dono): trocar "LiquidCrystal I2C 1.1.2" por "LiquidCrystal 1.0.7". Depende de autorização do dono.
   - Commit das mudanças de 03/11/2026 (seção 3): feito em `e6a9263`, enviado para origin/main a pedido do dono.
-- CAM (bloqueio atual, 02/11/2026): gravação com sucesso não concluída (seção 4, "ESP32-CAM, 02/11/2026"). Hipóteses por inferência: jumpers, hub USB, adaptador PL2303 clone. Próximo passo: seção 9.
+- CAM (bloqueio de 02/11/2026; superado em 03/11/2026 tarde: gravada e na rede, seção 4, continuação). Texto histórico: gravação com sucesso não concluída (seção 4, "ESP32-CAM, 02/11/2026"). Hipóteses por inferência: jumpers, hub USB, adaptador PL2303 clone. Próximo passo: seção 9.
 - Pasta de build da CAM com os segredos do Config.h compilados: apagada pelo orquestrador em 02/11/2026. Amanhã é preciso recompilar (seção 9, passo 3) e apagar a pasta nova depois da gravação, sem abrir os arquivos.
 - Organização física da bancada: fixar as placas, agrupar os fios, usar jumpers curtos e etiquetar. O dono achou a montagem bagunçada (02/11/2026).
 - Alimentação definitiva da CAM: adaptador 9 a 12 V / 1 A na YwRobot, ou bateria 12 V com LM2596 em 5,0 V. Decisão do dono.
@@ -572,7 +648,24 @@ Pendente:
 
 ## 9. Próximo passo exato
 
-Próximo passo exato (03/11/2026), em ordem:
+Próximo passo exato (03/11/2026, fim da tarde), em ordem:
+0) Antes de qualquer passo: `LOCK_MODE=0` no Config.h local do Mega, fechadura desconectada; USB e chave da YwRobot desligadas ao mexer na fiação.
+1) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor); regravar as placas afetadas (Mega 1 pela IDE; CAM pelo método da seção 6, com o divisor medido). Pendente (seção 7, item b). Valores nunca no chat.
+2) Decidir o relógio: o servidor fornece a hora, ou rede com internet IPv4 para NTP (seção 7, item a).
+3) Montagem de uso da CAM no Mega 1 (seção 7, item d), seguindo `docs/MONTAGEM.md` e o passo 5 do bloco de 02/11 (D16 -> divisor -> IO13; IO14 -> D17). Antes, medir o divisor: meio entre 2,5 e 3,3 V (lembrar que o alicate pode ler baixo, seção 4). Sem 5 V em GPIO; 5 V da CAM só pelo pino 5V; lado de cima da YwRobot ainda a confirmar; Mega 2 fora da montagem.
+4) Servidor e rede do Mac: seguir o checklist "Como religar a rede de testes" (seção 4, sessão 5 continuação), passos 1 a 5. Depois, teste fim a fim: `docs/MONTAGEM.md` seção 5, passos 5 a 7.
+
+Como religar a rede de testes (checklist curto; detalhe na seção 4):
+- iPhone no cabo USB, "Permitir Que Outros Acessem" ligado.
+- Mac: Internet Sharing de "iPhone USB" para Wi-Fi, 2,4 GHz (canal 1, 6 ou 11), só Wi-Fi; `ifconfig bridge100 | grep "inet "` mostra 192.168.2.1.
+- Servidor no Terminal, com ADMIN_PIN e DEVICE_KEY no ambiente (valores fora do chat).
+- CAM: "CAM wifi conectado 192.168.2.x" e painel "ESP32 conectado" com último contato atualizando.
+
+Ainda pendentes do bloco da manhã (não executados): teclado 16 teclas (refazer pela tabela de 02/11 e conferir as 16 teclas); DY50 (teste "DY50 fora do ar" com 15 s sem tocar, e divisor nas colunas novas); LCD 1602 em 4 bits.
+
+Estado ao parar (03/11/2026, tarde): CAM gravada, com boot e Wi-Fi verificados e conexão contínua na rede de teste; NTP falha; PIN e chave expostos (a trocar); foto da CAM ao servidor e UART de uso não verificadas; setSleep commitado no commit da tarde de 03/11 (seção 3; ver git log); `LOCK_MODE=0`.
+
+Próximo passo anterior (03/11/2026, manhã), em ordem:
 Antes de qualquer passo: `LOCK_MODE=0` no Config.h local, fechadura desconectada, USB e chave da YwRobot desligadas ao mexer na fiação.
 1. Terminar a ligação do teclado pela tabela de 02/11 (seção 4, sessão 4): pinos 1 a 4 = C1 a C4 = D26 a D29; pinos 5 a 8 = R1 a R4 = D22 a D25. Com a USB desligada. Não seguir o desenho da Área de Trabalho.
 2. Confirmar a configuração do lado de cima da YwRobot: jumper OFF com o 5 V do Mega nas trilhas de cima (diagrama 03), ou jumper em 5 V com a fonte e sem o fio 5 V do Mega. Nunca o jumper de cima em 5V E o fio 5V do Mega nas trilhas de cima ao mesmo tempo; nunca o 5V do Mega na trilha de 3,3 V. Leituras esperadas com o alicate BOMVINK (lê cerca de 1 V abaixo): com o jumper de cima OFF, USB desconectada e chave da YwRobot ligada, trilha de baixo "003" e trilha de cima "000"; depois de ligar a USB, trilha de cima "004" ou "005". Conferir com o alicate antes de ligar a USB.
@@ -581,7 +674,7 @@ Antes de qualquer passo: `LOCK_MODE=0` no Config.h local, fechadura desconectada
 5. Porta forçada: feito em 03/11/2026 (relato do dono; ver seção 4, sessão 5). Não repetir sem motivo.
 6. DY50: medir o divisor nas colunas novas (valores esperados por cálculo [1 kΩ + 2 kΩ; medidos em 02/11 nas colunas antigas]: coluna do D18 até GND ~3 kΩ; coluna do RX até GND ~2 kΩ) e explicar a leitura de 110k de 03/11; firmar a emenda do cabo; depois, com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS.
 7. LCD 1602 em 4 bits pela MONTAGEM 3.5 (pinos 1 e 2 do LCD sem curto: a leitura não pode dar 0; contraste no potenciômetro de 10 kΩ). Não verificado.
-8. CAM pelo segundo Mega, conforme o bloco de 02/11 mais abaixo (medir o ponto do meio antes de ligar o U0R). Rede: iPhone em "Maximizar Compatibilidade" (2,4 GHz), IP do Mac 172.20.10.x na URL da CAM, servidor com `--host 0.0.0.0`. Só ligar o U0R com leitura "002" no meio do divisor; com "003" ou mais, nunca ligar à CAM. Nunca 5 V em GPIO da CAM; a CAM recebe 5 V só no pino 5V.
+8. (superado pelo bloco da tarde, acima) CAM pelo segundo Mega, conforme o bloco de 02/11 mais abaixo (medir o ponto do meio antes de ligar o U0R). Rede: iPhone em "Maximizar Compatibilidade" (2,4 GHz), IP do Mac 172.20.10.x na URL da CAM, servidor com `--host 0.0.0.0`. Só ligar o U0R com leitura "002" no meio do divisor; com "003" ou mais, nunca ligar à CAM. Nunca 5 V em GPIO da CAM; a CAM recebe 5 V só no pino 5V.
 9. Registrar os resultados em `docs/VALIDACAO.md` e `docs/HANDOFF.md`. Commit das mudanças de 03/11 só quando o dono pedir (stage por arquivo).
 
 Estado ao parar (03/11/2026, sessão 5): Mega 1 com o firmware de 4 bits gravado (LCD ainda não ligado); alarme de porta forçada verificado pelo relato do dono; DY50 intermitente, voltou após RESET; teclado sendo refeito pela tabela; lado de cima da YwRobot não confirmado; CAM não gravada (fiação da ponte pelo segundo Mega feita, medição não informada); mudanças não commitadas sobre `f44a926`; `SHOW_TYPED_DIGITS` ainda não ativo na bancada; Wokwi não executado; `LOCK_MODE=0`.

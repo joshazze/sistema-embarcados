@@ -158,7 +158,8 @@ constexpr uint32_t kPermanentRejectWindowMs = 30000;
 constexpr uint32_t kPermanentRetryDelayMs = 2000; // espera antes de reenviar o mesmo item rejeitado (sem descarte)
 bool isPermanentStatus(int status) { return status == 400 || status == 409 || status == 413 || status == 422; }
 void networkTask(void *) {
-  WiFi.mode(WIFI_STA); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
+  // Sem economia de energia do Wi-Fi: com o Compartilhamento de Internet do Mac a CAM deixava de receber pacotes.
+  WiFi.mode(WIFI_STA); WiFi.setSleep(false); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
   configTime(0,0,"pool.ntp.org","time.google.com");
   uint32_t lastPoll=0,lastHeartbeat=0,lastRetry=0,lastDiagnostic=0; bool sentEvent=false, reportedFailure=false;
   uint32_t rejectStreak=0, rejectSince=0, streakBoot=0, streakId=0;

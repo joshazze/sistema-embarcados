@@ -65,7 +65,7 @@ void vTaskDelay(unsigned n) {
 }
 constexpr int WIFI_STA=1, WL_CONNECTED=3;
 uint32_t wifiDownFrom=0, wifiDownUntil=0; // intervalo de millis() sem Wi-Fi (0/0 = sempre conectado após o início)
-struct WiFiMock { void mode(int) {} void setAutoReconnect(bool) {} void begin(const char*,const char*) {} int status() { return (cycles<2 || (ticks>=wifiDownFrom && ticks<wifiDownUntil)) ? 0 : WL_CONNECTED; } void reconnect() {} } WiFi;
+struct WiFiMock { void mode(int) {} void setSleep(bool) {} void setAutoReconnect(bool) {} void begin(const char*,const char*) {} int status() { return (cycles<2 || (ticks>=wifiDownFrom && ticks<wifiDownUntil)) ? 0 : WL_CONNECTED; } void reconnect() {} } WiFi;
 void configTime(int,int,const char*,const char*) {}
 const char * const eventNames[]={"", "device_boot", "storage_error", "user_snapshot", "user_enrolled", "user_disabled", "user_enabled", "password_reset", "admin_login", "access_granted", "access_denied", "door_opened", "door_closed", "entry_expired", "door_timeout", "forced_open", "enroll_failed"};
 const char * const methodNames[]={"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web"};
