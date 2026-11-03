@@ -332,6 +332,7 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 
 ## 6. Ferramentas
 
+- Diagramas (02/11/2026): `docs/diagramas/` (SVGs e `LEIAME.md`) e geradores Python em `scripts/diagramas/` (rodar na pasta de saída; caminhos relativos).
 - Arduino CLI e cores ESP32/AVR ficam em uma pasta de trabalho externa
   (`work/`, fora do repositório).
 - ctags ARM64 configurado via `runtime.tools.ctags.path`.
@@ -524,10 +525,26 @@ Pendente:
 
 ## 9. Próximo passo exato
 
+- Remontagem/organização dos cabos: usar `docs/diagramas/` (LEIAME.md). Os SVGs e os geradores em `scripts/diagramas/` servem de base para o dono refazer as conexões.
+
 Próximo passo exato (CAM, ponte pelo Mega, 02/11/2026):
 1. Conferir a montagem da ponte pelo desenho e pela lista da seção 4 (fios no conector POWER do Mega e na CAM; RESET -> GND; IO0-GND; 9 resistores de 330 Ω nas colunas 40 a 49; pino 0 -> coluna 40; coluna 49 -> GND; U0T -> pino 1; fio coluna 43 -> U0R ainda NÃO ligado). Chave da YwRobot desligada.
-2. Medir o ponto do meio: Mega na USB, RESET no GND, sem o fio 43 -> U0R, medir coluna 43 -> GND. "002": seguir. "001": tirar os 3 primeiros resistores (pino 0 direto na coluna 43). "003" ou mais: parar.
-3. Recompilar a CAM (`arduino-cli compile --fqbn esp32:esp32:esp32cam --build-path <pasta temporária> firmware/Esp32CamRede`, com o Config.h local) e gravar pela porta do Mega (CH340), primeiro com o upload normal a 115200 (`ls /dev/cu.usbserial-*` antes). Apagar a pasta temporária depois.
+2. MEDIÇÃO OBRIGATÓRIA ANTES DE LIGAR O U0R (não pular):
+   - Montagem: Mega na USB; RESET no GND; fio coluna 43 -> U0R DESLIGADO; medir coluna 43 -> GND com o alicate BOMVINK.
+   - Os valores abaixo são ESTIMATIVA por cálculo, não verificada em hardware. Limites da ESP32: nível alto ≥ ~2,47 V; máximo 3,6 V.
+   - Tabela (placa do Mega x montagem):
+
+     | Placa do Mega | Montagem | Tensão no U0R | Ação |
+     |---|---|---|---|
+     | sem resistor interno | 3+6 x 330 Ω | 3,33 V ("002") | ok, ligar o U0R |
+     | com 1 kΩ interno (comum em Mega/clones) | 3+6 x 330 Ω | 2,49 V ("001") | no limite: tirar os 3 primeiros (pino 0 direto na coluna 43) e medir de novo |
+     | com 1 kΩ interno | só 6 x 330 Ω | 3,32 V ("002") | ok |
+     | sem resistor interno | só 6 x 330 Ω | 5,0 V ("004"/"005") | NUNCA ligar à CAM |
+
+   - Regra: só ligar o U0R com leitura "002" (ou a linha "ok" da tabela). Em "003" ou mais, parar. Nunca ligar a coluna 43 a U0R com "004"/"005".
+   - Outras estimativas (não verificadas): U0T -> pino 1 direto é seguro (CH340 reconhece alto a partir de ~2 V; pela ficha). 5V do Mega via USB ~4,8 V basta ao regulador da CAM (precisa ≥ 4,4 V). Com RESET no GND, os pinos 0/1 do ATmega ficam em alta impedância e o firmware do Mega não é apagado.
+   - Diagnóstico na gravação: o aviso "Detected crystal freq" do esptool deve ficar perto de 40 MHz com o CH340 (com o PL2303 deu 41,07-41,59). O alicate BOMVINK lê cerca de 1 V abaixo (3,3 V aparece como "002"; 5 V como "004"/"005").
+3. SÓ COM A MEDIÇÃO "002" (passo 2): ligar o fio coluna 43 -> U0R e recompilar a CAM (`arduino-cli compile --fqbn esp32:esp32:esp32cam --build-path <pasta temporária> firmware/Esp32CamRede`, com o Config.h local) e gravar pela porta do Mega (CH340), primeiro com o upload normal a 115200 (`ls /dev/cu.usbserial-*` antes). Apagar a pasta temporária depois.
 4. Ver o boot: a 115200 na porta do Mega, com RESET ainda no GND e IO0 fora. Esperado: "CAM boot ... camera=ok" e "CAM wifi conectado".
 5. Converter para a montagem de uso, reaproveitando o divisor: tirar RESET-GND e IO0-GND; pino 0 sai; D16 -> coluna 40; coluna 43 -> IO13 (no lugar de U0R); U0T/pino 1 sai; IO14 -> D17; 5V e GND da CAM nas trilhas de cima (5 V da YwRobot).
 6. Iniciar o servidor (`python3 servidor/server.py --host 0.0.0.0 --port 8080`, com `ADMIN_PIN` e `DEVICE_KEY` no ambiente) e seguir `docs/MONTAGEM.md` seção 5, passos 4 a 7. Mega só pela USB; GND comum.
