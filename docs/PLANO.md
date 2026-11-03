@@ -54,7 +54,7 @@ Para preparar os sketches, copiar `Config.example.h` para `Config.h` em cada
 pasta. O Mega requer senha de administrador local de 10 dígitos; a CAM requer
 rede Wi-Fi, URL e chave do dispositivo. O servidor deve usar a mesma senha e
 chave. Os `Config.h` são ignorados pelo Git. Instalar Crypto 0.4.0, Adafruit
-Fingerprint 2.1.4, Keypad 3.1.1, LiquidCrystal I2C 1.1.2 e ArduinoJson 7.4.3;
+Fingerprint 2.1.4, Keypad 3.1.1 e ArduinoJson 7.4.3 (a LiquidCrystal 1.0.7, biblioteca embutida da Arduino IDE; com arduino-cli, instalar com `arduino-cli lib install LiquidCrystal`);
 usar `arduino:avr:mega` e `esp32:esp32:esp32cam`, respectivamente. Não gravar
 configurações de exemplo ou ativar a fechadura como se fossem produção.
 

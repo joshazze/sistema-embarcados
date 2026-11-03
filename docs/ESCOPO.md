@@ -1,7 +1,7 @@
 # Controle de acesso — escopo aprovado (Mega 2560 + ESP32-CAM)
 
 Protótipo acadêmico com Arduino Mega 2560 como controlador local, leitor DY50,
-teclado 4×4, LCD 16×2 I²C, LED RGB, buzzer ativo, dois botões na mesma porta,
+teclado 4×4, LCD 16×2 em 4 bits, LED RGB, buzzer ativo, dois botões na mesma porta,
 fechadura de 12 V / 2 A e ESP32-CAM Ai-Thinker para rede e captura de foto.
 Não há motor adicional para mover a porta ou a trava.
 
@@ -64,9 +64,12 @@ mantidos para rastreio. A versão anterior com ESP32 DevKit não faz parte da en
   aguardando abertura. Amarelo piscando: aberta autorizada. Vermelho: erro ou alarme.
   Roxo: administração/cadastro.
 - [E1] Vermelho por 2 segundos quando a credencial é recusada. Vermelho piscando quando
-  a porta é aberta sem autorização.
-- Buzzer: avisa a expiração e a porta aberta por 5 minutos. Nenhum som durante a espera
-  normal. O buzzer avisa; não move a porta nem substitui a fechadura.
+  a porta é aberta sem autorização; o buzzer também bipa (250 ms ligado e 250 ms desligado)
+  até fechar.
+- Buzzer: avisa a expiração e a porta aberta por 5 minutos. Porta aberta sem autorização
+  (forçada, ou já aberta no boot): bipe rápido de 250 ms ligado e 250 ms desligado, até
+  fechar a porta. Nenhum som durante a espera normal. O buzzer avisa; não move a porta
+  nem substitui a fechadura.
 
 **Limite mecânico:** o tempo da bobina não é a janela de acesso. O acionamento
 físico será habilitado após o ensaio da fechadura. Há modos de pulso e de manter
@@ -116,8 +119,8 @@ Confirmadas pelo código em `firmware/MegaControlador` e `firmware/Esp32CamRede`
 - **Servidor:** Python sem dependências externas (biblioteca padrão), banco SQLite
   e interface HTML/CSS/JavaScript local.
 - **Bibliotecas do Mega:** Crypto 0.4.0 (SHA-256), Adafruit Fingerprint 2.1.4,
-  Keypad 3.1.1 e LiquidCrystal I2C 1.1.2. **CAM:** ArduinoJson 7.4.3.
-- LCD I²C de 5 V ligado direto ao Mega (D20/D21), sem conversão de nível. Buzzer ativo de 5 V acionado por transistor,
+  Keypad 3.1.1 e LiquidCrystal 1.0.7 (biblioteca embutida da Arduino IDE; com arduino-cli, instalar com `arduino-cli lib install LiquidCrystal`). **CAM:** ArduinoJson 7.4.3.
+- LCD 1602 de 5 V em 4 bits, ligado direto ao Mega (D37 a D42), sem conversão de nível. Buzzer ativo de 5 V acionado por transistor,
   com pull-down e sem pull-up de 5 V no pino do controlador.
 
 ## Validação antes da demonstração

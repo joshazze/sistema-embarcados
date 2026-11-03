@@ -21,7 +21,7 @@ fotos em SQLite e oferece o painel de administração.
 
 1. Instale os cores Arduino AVR **1.8.8** e ESP32 **3.3.12**. Instale as
    bibliotecas Crypto **0.4.0**, Adafruit Fingerprint **2.1.4**, Keypad **3.1.1**,
-   LiquidCrystal I2C **1.1.2** e ArduinoJson **7.4.3**. As pastas de sketch são
+   ArduinoJson **7.4.3**. A LiquidCrystal 1.0.7 (biblioteca embutida da Arduino IDE; com arduino-cli, instalar com `arduino-cli lib install LiquidCrystal`). As pastas de sketch são
    `firmware/MegaControlador` e `firmware/Esp32CamRede`.
 2. Copie `Config.example.h` para `Config.h` em cada pasta, caso ainda não exista.
    No Mega, defina localmente uma senha de administrador de 10 dígitos. Na CAM,
@@ -108,7 +108,7 @@ flowchart LR
     Teclado[Teclado 4x4] --> Mega[Arduino Mega 2560]
     DY[DY50: digitais persistentes] <-->|UART| Mega
     Sensores[Dois botoes da porta] --> Mega
-    Mega --> LCD[LCD 16x2 via I2C]
+    Mega --> LCD[LCD 16x2 em 4 bits]
     Mega --> LED[LED RGB]
     Mega --> Buzzer[Buzzer ativo via NPN]
     Mega --> Driver[Driver de potencia]
@@ -198,7 +198,7 @@ removida ao receber o resultado. O histórico nunca contém a senha.
 | Crypto | 0.4.0 |
 | Adafruit Fingerprint Sensor Library | 2.1.4 |
 | Keypad | 3.1.1 |
-| LiquidCrystal I2C | 1.1.2 |
+| LiquidCrystal | 1.0.7 (embutida na IDE) |
 | ArduinoJson | 7.4.3 |
 
 WiFi, HTTPClient, Wire e FreeRTOS já vêm no pacote ESP32; o driver da câmera
@@ -223,7 +223,8 @@ Mega (`firmware/MegaControlador/Config.h`):
 | `LOCK_MODE` | 0 simulação (sem acionamento), 1 pulso, 2 energizada até abrir/expirar |
 | `LOCK_PULSE_MS` | Duração do pulso a validar, não é a janela de 60 s |
 | `LOCK_ON` | HIGH/LOW conforme entrada do driver |
-| `LCD_ADDRESS` | Normalmente 0x27; confirmar o adaptador |
+| `LCD_PIN_RS`, `LCD_PIN_E`, `LCD_PIN_D4` a `LCD_PIN_D7` | Pinos do LCD 1602 em 4 bits (padrão D37 a D42); usar `#define` |
+| `SHOW_TYPED_DIGITS` | Opcional, só para bancada: `#define SHOW_TYPED_DIGITS 1` mostra a senha digitada no espelho da serial (o LCD continua com `*`). Não colar esses logs em chats. |
 | `RGB_COMMON_ANODE` | `false` para cátodo comum, `true` para ânodo comum |
 
 CAM (`firmware/Esp32CamRede/Config.h`):
@@ -312,7 +313,7 @@ para este trabalho. Reiniciar perde as filas, conforme decidido.
 
 [VALIDACAO.md](docs/VALIDACAO.md) registra os comandos executados e o nível de
 evidência de cada resultado. O pacote não é prova de funcionamento em hardware.
-Permanecem pendentes: níveis UART do DY50 e entre Mega e CAM, endereço LCD,
+Permanecem pendentes: níveis UART do DY50 e entre Mega e CAM, LCD em 4 bits,
 resistores/LED, polaridade do driver, alimentação, mecanismo/regime da trava,
 captura e envio de foto pela câmera. A montagem e o roteiro de comunicação estão em
 [MONTAGEM.md](docs/MONTAGEM.md) (seção 5); os ensaios funcionais de bancada estão em

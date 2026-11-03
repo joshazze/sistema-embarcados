@@ -15,10 +15,7 @@
       "id": "lcd1",
       "top": -120,
       "left": 360,
-      "attrs": {
-        "pins": "i2c",
-        "i2cAddress": "0x27"
-      }
+      "attrs": {}
     },
     {
       "type": "wokwi-membrane-keypad",
@@ -130,26 +127,74 @@
   ],
   "connections": [
     [
-      "mega:20",
-      "lcd1:SDA",
-      "blue",
-      []
-    ],
-    [
-      "mega:21",
-      "lcd1:SCL",
-      "green",
+      "mega:GND.1",
+      "lcd1:VSS",
+      "black",
       []
     ],
     [
       "mega:5V",
-      "lcd1:VCC",
+      "lcd1:VDD",
       "red",
       []
     ],
     [
       "mega:GND.1",
-      "lcd1:GND",
+      "lcd1:V0",
+      "black",
+      []
+    ],
+    [
+      "mega:37",
+      "lcd1:RS",
+      "yellow",
+      []
+    ],
+    [
+      "mega:GND.1",
+      "lcd1:RW",
+      "black",
+      []
+    ],
+    [
+      "mega:38",
+      "lcd1:E",
+      "orange",
+      []
+    ],
+    [
+      "mega:39",
+      "lcd1:D4",
+      "green",
+      []
+    ],
+    [
+      "mega:40",
+      "lcd1:D5",
+      "blue",
+      []
+    ],
+    [
+      "mega:41",
+      "lcd1:D6",
+      "purple",
+      []
+    ],
+    [
+      "mega:42",
+      "lcd1:D7",
+      "white",
+      []
+    ],
+    [
+      "mega:5V",
+      "lcd1:A",
+      "red",
+      []
+    ],
+    [
+      "mega:GND.1",
+      "lcd1:K",
       "black",
       []
     ],

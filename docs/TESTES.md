@@ -13,13 +13,13 @@ Wi-Fi/câmera físicos e não comprova a temporização de ponta a ponta.
 O teste da `networkTask` com rede dublada também cobre reconexão, falhas de
 evento e foto, confirmações com ID incorreto e reset confirmado pelo controlador.
 Os testes do Mega cobrem abertura durante busca de senha, cadastro de digital e
-escrita na EEPROM, além de timeout do LCD. A quantidade de testes muda com a
+escrita na EEPROM. A quantidade de testes muda com a
 suíte: consulte a saída de `python3 -m unittest discover -s tests -v`.
 `tests/test_lcd_textos.py` confere, a partir do próprio `.ino`, que nenhum texto
 do LCD passa de 16 colunas. `tests/test_mega_tst02.py` cobre debounce, cores do
 LED, texto do LCD com ID, teclas D, `*` e `#`, `pin_in_use` e sequências com
-`doorTick` e `outputsTick` reais. Com `CONTROLE_MEGA_B6=<pasta>`, ele roda contra
-outra cópia do firmware, o que serve para testes de mutação. Dois dos 9 testes
+`doorTick` e `outputsTick` reais, inclusive o bipe rápido da porta aberta sem autorização (`BuzzerPortaForcadaTests`). Com `CONTROLE_MEGA_B6=<pasta>`, ele roda contra
+outra cópia do firmware, o que serve para testes de mutação. Dois dos 10 testes
 desse arquivo (`RegistroCorrompidoTests`) são de regressão de registro corrompido
 (B7, REQ-E4): falham no código anterior à correção e passam no atual.
 
@@ -51,8 +51,7 @@ ordem de energização e o roteiro de comunicação (seção 5) estão em
 estão na seção seguinte. Faça o primeiro ensaio com a carga desconectada e
 `LOCK_MODE=0`. O código não transforma simulação em evidência real.
 
-Na bancada, anote a fonte utilizada, o modelo do driver, a versão do DY50, o
-endereço do LCD, o modo e a duração do acionamento aprovados e o resultado de
+Na bancada, anote a fonte utilizada, o modelo do driver, a versão do DY50, o modo e a duração do acionamento aprovados e o resultado de
 cada ensaio.
 
 ## Ensaios funcionais de bancada (Mega + CAM)
@@ -109,9 +108,9 @@ requisitos de [ESCOPO.md](ESCOPO.md).
 | Abriu e manteve 4 min 59 s (req. 16, 18) | Abrir a porta após autorizar e aguardar | Amarelo piscando; ID no LCD |
 | Abriu e manteve 5 min (req. 16, E1) | Manter a porta aberta por 5 min | Vermelho piscando; "Feche a porta"; bipe de 250 ms a cada 2 s |
 | Fechar após alerta (req. 16, 17) | Fechar a porta após o alerta de 5 min | Bipes param; ciclo encerrado; aguarda outra credencial |
-| Porta aberta sem autorização (E1) | Abrir a porta sem credencial (ex.: sensor solto) | Alarme: vermelho piscando; não aceita abertura normal |
+| Porta aberta sem autorização (E1) | Abrir a porta sem credencial (ex.: sensor solto) | Alarme: vermelho piscando; não aceita abertura normal; buzzer bipa de 250 ms ligado e 250 ms desligado até fechar |
 | Boot e espera normal (req. 15) | Ligar, aguardar sem interação e depois enviar `AUTH <senha de administrador>` e `STATUS` pelo USB | Buzzer desligado na espera; `STATUS` responde depois do AUTH |
-| STATUS e BOOT no USB (req. 1, 19) | Abrir o monitor a 115200, enviar `AUTH <senha de administrador de 10 dígitos>` e `STATUS`; ler a linha `BOOT` ao reiniciar | `OK authenticated`; STATUS no formato `last_id=... queued=... dropped=... replies_dropped=... lcd=ok|timeout dy50=ok|indisponivel lock_mode=0`; BOOT com `storage=`, `lcd=`, `dy50=` e `lock_mode=0`; `lcd=timeout` também aparece com LCD ausente ou sem resposta no boot; AUTH errado responde `ERR auth`; sem AUTH, `ERR auth_required` |
+| STATUS e BOOT no USB (req. 1, 19) | Abrir o monitor a 115200, enviar `AUTH <senha de administrador de 10 dígitos>` e `STATUS`; ler a linha `BOOT` ao reiniciar | `OK authenticated`; STATUS no formato `last_id=... queued=... dropped=... replies_dropped=... dy50=ok|indisponivel lock_mode=0`; BOOT com `storage=`, `dy50=` e `lock_mode=0`; AUTH errado responde `ERR auth`; sem AUTH, `ERR auth_required` |
 | Modo da trava (req. 1, 17) | Com `LOCK_MODE=0`, medir a saída de acionamento (D35) durante um ciclo | 0 V; saída não aciona a fechadura |
 | Sem internet ao iniciar (req. 19, 21, E8) | Ligar com Wi-Fi/internet indisponível (sem NTP) | Acesso local funciona; eventos sem data (painel mostra "Sem horário", sessão e segundos desde a inicialização). Com Wi-Fi e NTP no ar, parar o servidor não remove a data dos eventos |
 | Retornar internet (req. 21) | Restabelecer Wi-Fi e NTP | Novos eventos recebem data e hora; eventos antigos não são reescritos |

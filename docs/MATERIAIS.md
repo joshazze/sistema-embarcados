@@ -9,7 +9,7 @@
 | 1 | Adaptador USB-serial PL2303 (pinos 3V3, TXD, RXD, GND, 5V) | Do dono, desde 31/10/2026. TX em nível de 3,3 V (medido). Gravação pelos fios da MONTAGEM seção 4. Substitui a base ESP32-CAM-MB |
 | 1 | Leitor de digital DY50 com cabo | Pinagem, alimentação, níveis lógicos e UART da unidade real |
 | 1 | Teclado matricial 4×4 | Identificar a ordem das linhas e colunas |
-| 1 | LCD 16×2 com interface I²C | Presença do backpack e endereço; exemplo usa `0x27` |
+| 1 | LCD 1602 (modo 4 bits, sem I²C) + potenciômetro de 10 kΩ (contraste) + resistor de 220 Ω (luz de fundo) | Pinagem pela ficha do LCD; alguns já trazem o resistor da luz de fundo |
 | 1 | LED ou módulo RGB | Tipo de comum, pinagem e resistores já existentes |
 | 2 | Botões ou sensores de contato | Contatos fechados quando a porta está fechada |
 | 1 | Buzzer ativo 5 V, até 50 mA | Identificar polaridade e tipo; acionar com transistor |
@@ -32,7 +32,7 @@ Inventário pela foto do dono em 31/10/2026 (identificação visual; valores nã
 |---|---|
 | Tem | Mega 2560 com cabo USB; ESP32-CAM com câmera; adaptador USB-serial PL2303 (desde 31/10/2026); leitor de digital (DY50 ou equivalente) com cabo emendado por conector e jumpers (02/11/2026; alimentado pela MB102 e comunicando); teclado 4x4 de teclas rígidas (barra de 8 pinos soldada em 02/11/2026); LCD 1602 (sem módulo I2C); buzzer solto de 2 pernas (ativo, em uso); módulo de buzzer de 3 pinos `S V G` (passivo, descartado em 02/11/2026); 2 botões de painel; módulo relé 5 V (candidato a driver da fechadura); 2 módulos de fonte de protoboard (YwRobot MB102 em uso desde 02/11/2026); fonte de parede de 7 V (em uso, plugue P4 na MB102); adaptador 5 V 1 A F05W-050100SPAE (disponível, não usado); conectores de alavanca; saquinho com LEDs e resistores; fechadura 12 V (guardada fora da bancada); jumpers; protoboard; alicate amperímetro; ferro de solda e barra de pinos |
 | Comprando | Bateria 12 V 5200 mAh; 2 step-down LM2596 com display |
-| Falta comprar | Módulo I2C PCF8574 para o LCD; carregador da bateria (se não vier junto); módulo LED RGB `R G B GND` (ausente em 02/11/2026: a peça não está com o dono). A base ESP32-CAM-MB não é mais necessária |
+| Falta comprar | potenciômetro de 10 kΩ (ou resistor de 1 kΩ a 2,2 kΩ); carregador da bateria (se não vier junto); módulo LED RGB `R G B GND` (ausente em 02/11/2026: a peça não está com o dono). A base ESP32-CAM-MB não é mais necessária |
 | Conferir na bancada | Resistores (medidos com o alicate em 02/11/2026, ver abaixo): 4 de 1 kΩ, uma tira de 10 kΩ (quantidade não contada) e vários de 330 Ω; diodo 1N4007 (se o relé não tiver diodo); buzzer resolvido em 02/11/2026 (de 2 pernas, ativo, com BC546; módulo S V G descartado, ver abaixo); se o módulo LED RGB tem resistores; entrada e diodo do módulo relé |
 | Não usados | Sensor DHT11, RTC DS1302, Bluetooth HC-05/06, servo SG90, outro Arduino |
 

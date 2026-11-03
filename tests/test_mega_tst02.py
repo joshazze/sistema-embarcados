@@ -78,14 +78,10 @@ MOCKS_LCD = r'''
 #define LCD_SERIAL_MIRROR 1
 struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
 #include <cstdlib>
-bool lcdReady = true;
-struct FakeWire {
- bool failed = false;
- void clearWireTimeoutFlag() { failed = false; }
- bool getWireTimeoutFlag() { return failed; }
-} Wire;
 struct FakeLCD {
  int row = 0; String linhas[2];
+ void begin(int, int) {}
+ void print(const char *) {}
  void setCursor(int, int r) { row = r; }
  void write(uint8_t c) { linhas[row] += char(c); }
 } lcd;
@@ -327,6 +323,57 @@ class SequenciasPortaTests(unittest.TestCase):
         for modo in (1, 2):
             with self.subTest(lock_mode=modo):
                 _executar(PREFIXO_HW + _pecas_hw(src) + AJUDANTES_HW + MAIN_PORTA, lock_mode=modo)
+
+
+# ---------------------------------------------------------------- item 7: buzzer na porta forçada
+MAIN_BUZZER_FORCADO = r'''
+int main() {
+ fecha(true);  // porta começa fechada (botões em LOW)
+ rawClosed = stableClosed = true; rawSince = 0; door.begin(true, 0); resetUi(); noticeDuration = 0;
+ // (a) porta fechada e ociosa: buzzer em silêncio
+ passo(1000); assert(buzzerPin() == 0);
+ // (b) porta aberta sem autorização: ForcedOpen em 2050 (debounce de 50 ms)
+ fecha(false); passo(2000); passo(2050);
+ assert(door.state == DoorState::Alarm && door.user == 0 && door.since == 2050);
+ assert(audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
+ passo(2050); assert(buzzerPin() == 1);   // since+0: liga já no evento
+ passo(2150); assert(buzzerPin() == 1);   // since+100
+ passo(2350); assert(buzzerPin() == 0);   // since+300
+ passo(2600); assert(buzzerPin() == 1);   // since+550
+ passo(2800); assert(buzzerPin() == 0);   // since+750
+ // (c) fechar: encerra o alarme e o buzzer desliga
+ audits.clear(); fecha(true); passo(3000); passo(3050);
+ assert(door.state == DoorState::Idle && audits.size() == 1 && audits[0] == "door_closed|0||");
+ assert(buzzerPin() == 0);
+ passo(3600); assert(buzzerPin() == 0);
+ // (d) boot com porta aberta: begin já entra em Alarm sem usuário e o bipe rápido começa
+ door.begin(false, 4000); rawClosed = stableClosed = false; rawSince = 0; fecha(false);
+ passo(4000); assert(door.state == DoorState::Alarm && door.user == 0 && buzzerPin() == 1);
+ passo(4250); assert(buzzerPin() == 0);   // 250 ms desligado
+ passo(4500); assert(buzzerPin() == 1);   // novo bipe
+ fecha(true); passo(4600); passo(4650);
+ assert(door.state == DoorState::Idle && buzzerPin() == 0);
+ // (e) OpenTooLong (alarme com usuário 7) mantém o bipe de 250 ms a cada 2 s
+ door.authorize(7, 5000); authorizationAt = 5000; accessMethod = "password"; buzzer.reset();
+ passo(5000); assert(door.state == DoorState::AwaitOpen);
+ fecha(false); passo(5100); passo(5150);
+ assert(door.state == DoorState::Open && door.user == 7);
+ passo(305150);
+ assert(door.state == DoorState::Alarm && door.user == 7 && audits.back() == "door_timeout|7|password|");
+ passo(305150); assert(buzzerPin() == 1);   // T+0
+ passo(305250); assert(buzzerPin() == 1);   // T+100
+ passo(305650); assert(buzzerPin() == 0);   // T+500
+ passo(307150); assert(buzzerPin() == 1);   // T+2000: repete a cada 2 s
+ fecha(true); passo(307200); passo(307250);
+ assert(door.state == DoorState::Idle && buzzerPin() == 0);
+}
+'''
+
+
+class BuzzerPortaForcadaTests(unittest.TestCase):
+    def test_bipe_rapido_em_porta_aberta_sem_autorizacao_e_bipe_lento_no_tempo_esgotado(self):
+        src = _ler_ino()
+        _executar(PREFIXO_HW + _pecas_hw(src) + AJUDANTES_HW + MAIN_BUZZER_FORCADO)
 
 
 # ---------------------------------------------------------------- item 3: LCD com ID

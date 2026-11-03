@@ -38,8 +38,8 @@ Leia antes de energizar qualquer coisa.
 | D17 | RX2 (link com a CAM) | GPIO14 da CAM, direto | Recebe 3,3 V da CAM |
 | D18 | TX1 (DY50) | RX do DY50, pelo 1 kΩ (seção 3.9) | Serigrafia do clone diz RX1; medido: TX1 |
 | D19 | RX1 (DY50) | TX do DY50, direto | Serigrafia do clone diz TX1; medido: RX1 |
-| D20 | SDA (LCD) | SDA do backpack I²C | |
-| D21 | SCL (LCD) | SCL do backpack I²C | |
+| D20 | Livre | Não ligar | Livre (o LCD usa 4 bits, sem I²C) |
+| D21 | Livre | Não ligar | Livre (o LCD usa 4 bits, sem I²C) |
 | D22 a D25 | Linhas R1 a R4 | Teclado | Entradas com pull-up (o Mega lê) |
 | D26 a D29 | Colunas C1 a C4 | Teclado | Saídas (o Mega aciona) |
 | D30 | Botão 1 da porta | Contato para GND | Pull-up interno |
@@ -49,6 +49,12 @@ Leia antes de energizar qualquer coisa.
 | D34 | LED RGB, azul | Resistor do canal | |
 | D35 | Entrada do driver da fechadura | Driver (IN) + pull-down 10 kΩ | Ver seção 3.10 |
 | D36 | Buzzer | Base do NPN, por 470 Ω (ou 330 Ω a 1 kΩ) | Ver seção 3.8 |
+| D37 | RS do LCD | Pino 4 (RS) do LCD 1602 | Ver seção 3.5 |
+| D38 | E do LCD | Pino 6 (E) do LCD 1602 | Ver seção 3.5 |
+| D39 | D4 do LCD | Pino 11 (D4) do LCD 1602 | Ver seção 3.5 |
+| D40 | D5 do LCD | Pino 12 (D5) do LCD 1602 | Ver seção 3.5 |
+| D41 | D6 do LCD | Pino 13 (D6) do LCD 1602 | Ver seção 3.5 |
+| D42 | D7 do LCD | Pino 14 (D7) do LCD 1602 | Ver seção 3.5 |
 | D0 e D1 | USB | Não usar | Ligados ao USB do Mega |
 
 ### ESP32-CAM (Ai-Thinker)
@@ -208,29 +214,44 @@ Antes de energizar:
 
 - [ ] Continuidade confirmada para cada tecla, sem curto entre pinos vizinhos.
 
-### 3.5 LCD 16x2 com backpack I²C
+### 3.5 LCD 1602 (modo 4 bits)
 
-Fios:
+Ligue o LCD direto ao Mega, sem módulo adaptador. Depois de ligar, o LCD mostra "Iniciando..." (ver seção 5).
 
-| De (backpack) | Para (Mega) |
-|---|---|
-| GND | GND |
-| VCC | 5V |
-| SDA | D20 (SDA) |
-| SCL | D21 (SCL) |
+Fios (pino do LCD 1602 -> Mega):
+
+| Pino do LCD | Nome | Liga em |
+|---|---|---|
+| 1 | VSS | GND |
+| 2 | VDD | 5V |
+| 3 | V0 | Pino do meio de um potenciômetro de 10 kΩ (pontas em 5V e GND), ou resistor de 1 kΩ a 2,2 kΩ para o GND |
+| 4 | RS | D37 |
+| 5 | RW | GND |
+| 6 | E | D38 |
+| 7 a 10 | D0 a D3 | Nada (não ligar) |
+| 11 | D4 | D39 |
+| 12 | D5 | D40 |
+| 13 | D6 | D41 |
+| 14 | D7 | D42 |
+| 15 | A (luz de fundo +) | 5V por resistor de 220 Ω |
+| 16 | K (luz de fundo -) | GND |
 
 Observações:
 
-- Endereço I²C no código: `0x27` (`LCD_ADDRESS` em `Config.example.h`).
-  Se o backpack tiver outro endereço, ajuste no `Config.h`.
-- O Mega trabalha em 5 V, então o backpack de 5 V não precisa de conversor.
-  Confirme na ficha do backpack.
-- Ajuste o potenciômetro de contraste até ver os caracteres.
-- Depois de ligar, o LCD mostra "Iniciando..." (ver seção 5).
+- Os pinos mudam definindo `LCD_PIN_RS`, `LCD_PIN_E` e `LCD_PIN_D4` a `LCD_PIN_D7` no `Config.h`, com `#define LCD_PIN_RS 43` etc. antes do fim do `Config.h` (use `#define`, não `constexpr`).
+- Usa a biblioteca LiquidCrystal (vem com a Arduino IDE).
+- O firmware não detecta LCD ausente: o STATUS e o BOOT não têm o campo `lcd=`.
+- O espelho `LCD| ...` na serial continua funcionando.
+- O LCD precisa de barra de pinos soldada.
+- Ajuste o contraste (potenciômetro ligado ao pino 3) até ver os caracteres. Sem contraste, a tela fica vazia ou só com blocos.
+- Alguns LCD 1602 já têm resistor da luz de fundo na placa; confira antes. Se tiver, o de 220 Ω pode ficar ou sair.
 
 Antes de energizar:
 
-- [ ] Confirme que o módulo é 16x2 e tem backpack I²C.
+- [ ] Pinos 1 e 16 identificados na ficha do LCD. Pino 1 (VSS) vai ao GND e pino 2 (VDD) ao 5V; não inverter.
+- [ ] Continuidade confirmada na solda, sem curto entre pinos vizinhos.
+- [ ] Resistor da luz de fundo (220 Ω) ligado ao pino 15.
+- [ ] Pino 5 (RW) ao GND e pino 3 (V0) no potenciômetro ou resistor (solto, a tela fica vazia ou com lixo).
 
 ### 3.6 Botões da porta (contatos)
 
@@ -314,7 +335,9 @@ Observações:
 - NPN que servem (conferir a pinagem na ficha): BC337, BC546 a BC550, 2N2222, 2N3904, S8050, C945, C1815. Só o BC546 foi testado na bancada.
 - PNP não servem (com PNP no lado alto a lógica inverte e o buzzer apitaria em repouso): BC327, BC557, 2N3906, S8550.
 - Avisos do firmware: três bipes curtos ao expirar o minuto sem abrir. Um bipe
-  a cada 2 s após 5 minutos de porta aberta. Ver `BuzzerLogic.h`.
+  a cada 2 s após 5 minutos de porta aberta. Porta aberta sem autorização (forçada, ou
+  já aberta no boot): bipe de 250 ms ligado e 250 ms desligado até fechar a porta
+  (`outputsTick` em `MegaControlador.ino`). Ver `BuzzerLogic.h`.
 - Com `LOCK_MODE=0`, o buzzer funciona normalmente. Só a fechadura fica desligada.
 
 Antes de energizar:
@@ -506,14 +529,12 @@ Use `LOCK_MODE=0`, com a fechadura e o driver desconectados. Siga a ordem.
   está ligado, então "DY50 fora do ar" é o esperado nesta fase. "Falha memoria" bloqueia.
 - Abra o monitor serial a 115200, com final de linha "Nova linha" (Newline). Abrir o
   monitor costuma reiniciar o Mega. Aparece uma linha de boot, no formato
-  `BOOT boot=<n> storage=ok|falha lcd=ok|timeout dy50=ok|indisponivel lock_mode=<n>`.
+  `BOOT boot=<n> storage=ok|falha dy50=ok|indisponivel lock_mode=<n>`.
 - Envie `AUTH <senha de administrador de 10 dígitos>`. A resposta deve ser `OK authenticated`.
   Sem AUTH, comandos respondem `ERR auth_required`.
 - Envie `STATUS`. Formato esperado:
-  `last_id=... queued=... dropped=... replies_dropped=... lcd=ok|timeout dy50=indisponivel lock_mode=0`
-  `lcd=ok` vale com o LCD ligado. `lcd=timeout` aparece quando o LCD não responde
-  no boot (ausente ou barramento I²C sem resposta); o Mega tenta de novo a cada
-  30 s. Até o passo 7 o DY50 não está ligado, então `dy50=indisponivel` é esperado nesta
+  `last_id=... queued=... dropped=... replies_dropped=... dy50=indisponivel lock_mode=0`
+  Até o passo 7 o DY50 não está ligado, então `dy50=indisponivel` é esperado nesta
   fase, tanto aqui quanto na linha `BOOT`.
 - Meça D16 (esperado perto de 5 V em repouso) e D35 (esperado 0 V). Cada reset
   faz D35 flutuar por 1 a 2 s, por isso o pull-down da seção 3.10. Meça depois do boot.

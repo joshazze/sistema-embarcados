@@ -9,7 +9,8 @@
 #
 # Variaveis opcionais:
 #   AVR_CORE     pasta do core arduino avr (padrao: $HOME/Library/Arduino15/packages/arduino/hardware/avr/1.8.6)
-#   ARDUINO_LIBS pasta das bibliotecas (padrao: $HOME/Documents/Codex/2026-10-22/dc/work/arduino-user/libraries)
+#   ARDUINO_LIBS pasta das bibliotecas: Keypad, Crypto, Adafruit_Fingerprint, ArduinoJson (padrao: $HOME/Documents/Arduino/libraries)
+#   LCD_LIB      biblioteca LiquidCrystal (4 bits paralelo, montada read-only em /lcdlib) (padrao: $HOME/Library/Arduino15/libraries/LiquidCrystal)
 #   AVR_IMAGE    imagem Docker (padrao: controle-acesso-avr-probe:local)
 set -euo pipefail
 
@@ -19,10 +20,11 @@ FIRMWARE_DIR="$REPO_DIR/firmware/MegaControlador"
 OUT_DIR="$SCRIPT_DIR/build"
 
 AVR_CORE="${AVR_CORE:-$HOME/Library/Arduino15/packages/arduino/hardware/avr/1.8.6}"
-ARDUINO_LIBS="${ARDUINO_LIBS:-$HOME/Documents/Codex/2026-10-22/dc/work/arduino-user/libraries}"
+ARDUINO_LIBS="${ARDUINO_LIBS:-$HOME/Documents/Arduino/libraries}"
+LCD_LIB="${LCD_LIB:-$HOME/Library/Arduino15/libraries/LiquidCrystal}"
 AVR_IMAGE="${AVR_IMAGE:-controle-acesso-avr-probe:local}"
 
-for d in "$FIRMWARE_DIR" "$AVR_CORE" "$ARDUINO_LIBS"; do
+for d in "$FIRMWARE_DIR" "$AVR_CORE" "$ARDUINO_LIBS" "$LCD_LIB"; do
   [ -d "$d" ] || { echo "ERRO: pasta nao encontrada: $d" >&2; exit 1; }
 done
 command -v docker >/dev/null || { echo "ERRO: docker nao encontrado" >&2; exit 1; }
@@ -46,15 +48,13 @@ rm -rf "$OUT"; mkdir -p "$OUT/obj"
 CORE=/core/cores/arduino; VAR=/core/variants/mega; MCU=atmega2560
 CFLAGS="-mmcu=$MCU -DF_CPU=16000000L -DARDUINO=10819 -DARDUINO_AVR_MEGA2560 -DARDUINO_ARCH_AVR -Os -g -ffunction-sections -fdata-sections -flto -fno-fat-lto-objects -I$CORE -I$VAR -Wall -Wextra"
 CXXFLAGS="$CFLAGS -std=gnu++11 -fpermissive -fno-exceptions -fno-threadsafe-statics -Wno-error=narrowing"
-WIRE=/core/libraries/Wire/src; EEP=/core/libraries/EEPROM/src
-LIBINC="-I$WIRE -I$EEP -I/core/libraries/SoftwareSerial/src -I/libs/Keypad/src -I/libs/LiquidCrystal_I2C -I/libs/Adafruit_Fingerprint_Sensor_Library -I/libs/Crypto/src -I/libs/Crypto/src/utility -I$SRC"
+EEP=/core/libraries/EEPROM/src
+LIBINC="-I$EEP -I/core/libraries/SoftwareSerial/src -I/libs/Keypad/src -I/lcdlib/src -I/libs/Adafruit_Fingerprint_Sensor_Library -I/libs/Crypto/src -I/libs/Crypto/src/utility -I$SRC"
 cp "$SRC/MegaControlador.ino" "$OUT/MegaControlador.cpp"
 objs=()
 for f in "$CORE"/*.cpp; do o="$OUT/obj/core_$(basename "$f").o"; avr-g++ $CXXFLAGS -c "$f" -o "$o"; objs+=("$o"); done
 for f in "$CORE"/*.c; do o="$OUT/obj/core_$(basename "$f").o"; avr-gcc $CFLAGS -std=gnu11 -c "$f" -o "$o"; objs+=("$o"); done
-o="$OUT/obj/Wire.o"; avr-g++ $CXXFLAGS $LIBINC -c "$WIRE/Wire.cpp" -o "$o"; objs+=("$o")
-o="$OUT/obj/twi.o"; avr-gcc $CFLAGS -std=gnu11 -c "$WIRE/utility/twi.c" -o "$o"; objs+=("$o")
-for f in /libs/Keypad/src/Keypad.cpp /libs/Keypad/src/Key.cpp /libs/LiquidCrystal_I2C/LiquidCrystal_I2C.cpp /libs/Adafruit_Fingerprint_Sensor_Library/Adafruit_Fingerprint.cpp /libs/Crypto/src/SHA256.cpp /libs/Crypto/src/Hash.cpp /libs/Crypto/src/Crypto.cpp /core/libraries/SoftwareSerial/src/SoftwareSerial.cpp; do
+for f in /libs/Keypad/src/Keypad.cpp /libs/Keypad/src/Key.cpp /lcdlib/src/LiquidCrystal.cpp /libs/Adafruit_Fingerprint_Sensor_Library/Adafruit_Fingerprint.cpp /libs/Crypto/src/SHA256.cpp /libs/Crypto/src/Hash.cpp /libs/Crypto/src/Crypto.cpp /core/libraries/SoftwareSerial/src/SoftwareSerial.cpp; do
   o="$OUT/obj/$(echo "$f" | tr '/' '_').o"; avr-g++ $CXXFLAGS $LIBINC -c "$f" -o "$o"; objs+=("$o")
 done
 avr-g++ $CXXFLAGS $LIBINC -c "$OUT/MegaControlador.cpp" -o "$OUT/obj/sketch.o"
@@ -72,6 +72,7 @@ docker run --rm \
   -v "$STAGE":/work \
   -v "$AVR_CORE":/core:ro \
   -v "$ARDUINO_LIBS":/libs:ro \
+  -v "$LCD_LIB":/lcdlib:ro \
   "$AVR_IMAGE" \
   bash /work/inner_build.sh /work/sketch /work/out 2>&1 | tee "$LOG"
 

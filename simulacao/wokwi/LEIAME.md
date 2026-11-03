@@ -5,7 +5,7 @@ Simulação de bancada do firmware `firmware/MegaControlador` no Wokwi. Não sub
 ## O que cobre
 
 - Mega 2560 com o firmware compilado com `Config.example.h` (copiado como `Config.h` só na cópia de build).
-- LCD 16x2 I²C em `0x27` (SDA = D20, SCL = D21).
+- LCD 16x2 em modo paralelo de 4 bits, biblioteca `LiquidCrystal`: RS = D37, E = D38, D4 = D39, D5 = D40, D6 = D41, D7 = D42; RW em GND; V0 em GND (contraste máximo); VDD e A em 5V; VSS e K em GND. Sem I²C (`LiquidCrystal_I2C` e `Wire` saíram do LCD).
 - Teclado 4x4 (linhas D22–D25, colunas D26–D29), mesmo keymap do `.ino`.
 - LED RGB catodo comum em D32/D33/D34, com resistores de 220 Ω.
 - Buzzer no D36 (direto, sem transistor).
@@ -34,7 +34,7 @@ O script copia `firmware/MegaControlador` para uma pasta temporária sem `Config
 - `simulacao/wokwi/build/MegaControlador.ino.elf`
 - `simulacao/wokwi/build/build.log`
 
-Variáveis opcionais: `AVR_CORE`, `ARDUINO_LIBS`, `AVR_IMAGE`.
+Variáveis opcionais: `AVR_CORE`, `ARDUINO_LIBS` (padrão `$HOME/Documents/Arduino/libraries`), `LCD_LIB` (padrão `$HOME/Library/Arduino15/libraries/LiquidCrystal`, montada read-only em `/lcdlib`), `AVR_IMAGE`.
 
 ## Como rodar com wokwi-cli
 
@@ -54,7 +54,7 @@ WOKWI_CLI_TOKEN="$(security find-generic-password -s wokwi-cli-token -w)" ~/.wok
 
 Caminhos: segundo a doc do wokwi-cli (https://docs.wokwi.com/wokwi-ci/cli-usage), `--scenario` e `--diagram-file` são relativos à pasta do projeto (o argumento posicional `simulacao/wokwi`), não à raiz do repositório. Por isso o comando usa `scenario-boot.yaml`, e não `simulacao/wokwi/scenario-boot.yaml`. Rodado em 30/10/2026 (wokwi-cli 0.29.1); resultados em docs/VALIDACAO.md.
 
-Confirmado em execução: o LCD respondeu com mega:5V.
+Confirmado em execução (30/10/2026, fiação I²C antiga): o LCD respondeu com mega:5V. A fiação paralela de 4 bits ainda não foi rodada no wokwi-cli.
 
 Atenção: o firmware compilado (`.hex`/`.elf`) é enviado aos servidores do Wokwi para rodar a simulação. O `Config.example.h` (PIN de exemplo `0000000000`) é o que vai junto, nunca o `Config.h` real.
 

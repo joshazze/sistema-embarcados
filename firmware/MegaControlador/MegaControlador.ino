@@ -1,15 +1,35 @@
 /* PROTÓTIPO EM DESENVOLVIMENTO: não gravar para operar fechadura. */
 #include <Arduino.h>
-#include <Wire.h>
 #include <EEPROM.h>
 #include <SHA256.h>
 #include <Adafruit_Fingerprint.h>
 #include <Keypad.h>
-#include <LiquidCrystal_I2C.h>
 #include "Config.h"
+#include <LiquidCrystal.h>
+#ifndef LCD_PIN_RS
+#define LCD_PIN_RS 37
+#endif
+#ifndef LCD_PIN_E
+#define LCD_PIN_E 38
+#endif
+#ifndef LCD_PIN_D4
+#define LCD_PIN_D4 39
+#endif
+#ifndef LCD_PIN_D5
+#define LCD_PIN_D5 40
+#endif
+#ifndef LCD_PIN_D6
+#define LCD_PIN_D6 41
+#endif
+#ifndef LCD_PIN_D7
+#define LCD_PIN_D7 42
+#endif
 // Espelho do LCD na serial USB (linhas "LCD| ..."); desligue com LCD_SERIAL_MIRROR 0 em Config.h.
 #ifndef LCD_SERIAL_MIRROR
 #define LCD_SERIAL_MIRROR 1
+#endif
+#ifndef SHOW_TYPED_DIGITS
+#define SHOW_TYPED_DIGITS 0  // 1 = espelho da serial mostra os dígitos digitados (o LCD continua com *); só para bancada
 #endif
 #include "UserStore.h"
 #include "BootCounter.h"
@@ -20,7 +40,6 @@
 #include "BuzzerLogic.h"
 struct UserRecord { uint8_t active, salt[4], hash[16]; uint64_t lastWebToken; };
 bool storageReady = false, fingerprintReady = false;
-bool lcdReady = true;
 uint16_t lastId = 0;
 uint32_t bootNumber = 0, eventSequence = 0, droppedEvents = 0;
 void doorTick();
@@ -65,7 +84,7 @@ class ServicedFingerStream : public Stream {
 };
 ServicedFingerStream fingerStream;
 Adafruit_Fingerprint finger(static_cast<Stream *>(&fingerStream));
-LiquidCrystal_I2C lcd(LCD_ADDRESS, 16, 2);
+LiquidCrystal lcd(LCD_PIN_RS, LCD_PIN_E, LCD_PIN_D4, LCD_PIN_D5, LCD_PIN_D6, LCD_PIN_D7);
 char keys[4][4] = {{'1','2','3','A'}, {'4','5','6','B'}, {'7','8','9','C'}, {'*','0','#','D'}};
 byte rows[4], cols[4];
 Keypad keypad(makeKeymap(keys), rows, cols, 4, 4);
@@ -91,7 +110,7 @@ uint32_t serialTouched = 0;
 String serialLine;
 String lcdPrevA, lcdPrevB;
 String mirrorPrevA, mirrorPrevB;  // último par espelhado na serial (independe do LCD)
-uint32_t lastFingerRecovery = 0, lastLcdRecovery = 0;
+uint32_t lastFingerRecovery = 0;
 
 bool validPin(const String &pin, size_t length) {
   if (pin.length() != length) return false;
@@ -430,7 +449,10 @@ void outputsTick() {
     if (LOCK_MODE == 2) energized = true;
   }
   digitalWrite(LOCK_PIN, energized ? LOCK_ON : !LOCK_ON);
-  digitalWrite(BUZZER_PIN, buzzer.isOn(now) ? HIGH : LOW);
+  // Porta aberta sem autorização (ForcedOpen ou boot com porta aberta): bipe rápido até fechar.
+  const bool forcedAlarm = door.state == DoorState::Alarm && door.user == 0;
+  const bool buzz = forcedAlarm ? uint32_t(now - door.since) % 500 < 250 : buzzer.isOn(now);
+  digitalWrite(BUZZER_PIN, buzz ? HIGH : LOW);
   if (door.state == DoorState::Alarm) rgb((now / 350) % 2, false, false);
   else if (noticeActive() && noticeError) rgb(true, false, false);
   else if (ui != Ui::Access) rgb(true, false, true);
@@ -463,42 +485,13 @@ void fingerprintRecoveryTick() {
   lastFingerRecovery = millis();
   fingerprintReady = finger.verifyPassword() && finger.getParameters() == FINGERPRINT_OK && finger.capacity > MAX_USERS;
 }
-// Sonda do LCD: LCD ausente (NACK) ou barramento com timeout resulta em false.
-bool lcdPresent() {
-  Wire.clearWireTimeoutFlag(); Wire.beginTransmission(LCD_ADDRESS);
-  return Wire.endTransmission() == 0 && !Wire.getWireTimeoutFlag();
-}
-// Boot: só inicializa o LCD se a sonda responder; ausente ou com timeout fica lcdReady=false.
-void lcdBoot() {
-  lcdReady = lcdPresent();
-  if (!lcdReady) return;
-  lcd.init();
-  if (!Wire.getWireTimeoutFlag()) lcd.backlight();
-  lcdReady = !Wire.getWireTimeoutFlag();
-  if (lcdReady) {
-    lcd.print("Iniciando...");
-    lcdReady = !Wire.getWireTimeoutFlag();
-  }
-}
-// Após timeout I2C, tenta religar o LCD a cada 30 s e força o redesenho completo.
-// lcd.init() bloqueia ~1 s: só tentar com a mesma segurança do DY50 e sem buzzer ativo.
-void lcdRecoveryTick() {
-  if (lcdReady || uint32_t(millis() - lastLcdRecovery) < 30000) return;
-  if (ui != Ui::Access || door.state != DoorState::Idle || !door.closed || buzzer.isOn(millis()) || noticeActive() || entry.length()) return;
-  lastLcdRecovery = millis();
-  // Sonda antes do init: LCD ausente (NACK) ou barramento com timeout não conta como religado.
-  const bool present = lcdPresent();
-  if (!present) return;
-  doorTick(); outputsTick();
-  lcd.init();
-  doorTick(); outputsTick();
-  if (!Wire.getWireTimeoutFlag()) { lcd.backlight(); lcdReady = !Wire.getWireTimeoutFlag(); }
-  if (lcdReady) { lcdPrevA = ""; lcdPrevB = ""; }
-}
+// LCD 1602 em modo 4 bits (LiquidCrystal): não há detecção de módulo ausente.
+void lcdBoot() { lcd.begin(16, 2); lcd.print("Iniciando..."); }
 void displayTick() {
   if (uint32_t(millis() - lastLcd) < 150) return;
   lastLcd = millis();
   String a, b;
+  bool masked = false;
   if (door.state == DoorState::Alarm) { a = "Feche a porta"; b = door.user ? idText(door.user) : "Sem autorizacao"; }
   else if (noticeActive()) { a = noticeLine1; b = noticeLine2; }
   else if (ui != Ui::Access) {
@@ -514,41 +507,40 @@ void displayTick() {
       case Ui::ConfirmStatus: a = idText(pendingId) + (enableRequested ? " Reativar?" : " Inativar?"); b = "# Sim D Cancelar"; break;
       default: break;
     }
-    if (ui == Ui::FirstPin || ui == Ui::ConfirmPin) for (size_t i = 0; i < entry.length(); ++i) b += '*';
+    if (ui == Ui::FirstPin || ui == Ui::ConfirmPin) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; if (entry.length()) masked = true; }
   } else if (door.state == DoorState::AwaitOpen) { a = "Acesso liberado"; b = idText(door.user); }
   else if (door.state == DoorState::Open) { a = "Porta aberta"; b = idText(door.user); }
   else {
     a = !storageReady ? "Falha memoria" : "Senha ou digital";
-    if (entry.length()) for (size_t i = 0; i < entry.length(); ++i) b += '*';
+    if (entry.length()) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; masked = true; }
     else b = fingerprintReady ? "# OK * Limpar" : "DY50 fora do ar";
   }
 #if LCD_SERIAL_MIRROR
   // Espelho na serial USB: o mesmo texto do LCD, inclusive quando o LCD está ausente.
-  if (a != mirrorPrevA || b != mirrorPrevB) {
-    mirrorPrevA = a; mirrorPrevB = b;
+#if SHOW_TYPED_DIGITS
+  const String mb = masked ? entry : b;
+#else
+  const String mb = b; (void)masked;
+#endif
+  if (a != mirrorPrevA || mb != mirrorPrevB) {
+    mirrorPrevA = a; mirrorPrevB = mb;
     Serial.print(F("LCD| ")); Serial.print(a.substring(0, 16));
-    Serial.print(F(" | ")); Serial.println(b.substring(0, 16));
+    Serial.print(F(" | ")); Serial.println(mb.substring(0, 16));
   }
 #endif
-  if (!lcdReady) return;
   if (a != lcdPrevA || b != lcdPrevB) {
     String paddedA = a.substring(0, 16), paddedB = b.substring(0, 16);
     while (paddedA.length() < 16) paddedA += ' ';
     while (paddedB.length() < 16) paddedB += ' ';
-    Wire.clearWireTimeoutFlag();
     lcd.setCursor(0, 0);
-    if (Wire.getWireTimeoutFlag()) { lcdReady = false; return; }
     for (size_t i = 0; i < paddedA.length(); ++i) {
       doorTick(); outputsTick(); linkTick(true);
       lcd.write(uint8_t(paddedA[i]));
-      if (Wire.getWireTimeoutFlag()) { lcdReady = false; return; }
     }
     lcd.setCursor(0, 1);
-    if (Wire.getWireTimeoutFlag()) { lcdReady = false; return; }
     for (size_t i = 0; i < paddedB.length(); ++i) {
       doorTick(); outputsTick(); linkTick(true);
       lcd.write(uint8_t(paddedB[i]));
-      if (Wire.getWireTimeoutFlag()) { lcdReady = false; return; }
     }
     lcdPrevA = a; lcdPrevB = b;
   }
@@ -729,7 +721,7 @@ void serialTick() {
     serialTouched = millis();
     if (line == "STATUS") {
       Serial.print("last_id="); Serial.print(lastId); Serial.print(" queued="); Serial.print(count);
-      Serial.print(" dropped="); Serial.print(droppedEvents); Serial.print(" replies_dropped="); Serial.print(droppedReplies); Serial.print(" lcd="); Serial.print(lcdReady ? "ok" : "timeout");
+      Serial.print(" dropped="); Serial.print(droppedEvents); Serial.print(" replies_dropped="); Serial.print(droppedReplies);
       Serial.print(F(" dy50=")); Serial.print(fingerprintReady ? F("ok") : F("indisponivel"));
       Serial.print(" lock_mode="); Serial.println(LOCK_MODE);
     } else if (line == "LIST") {
@@ -754,7 +746,6 @@ void setup() {
   for (byte i = 0; i < 4; ++i) { rows[i] = ROW_PINS[i]; cols[i] = COL_PINS[i]; }
   pinMode(BUTTON_1, INPUT_PULLUP); pinMode(BUTTON_2, INPUT_PULLUP);
   pinMode(LED_R, OUTPUT); pinMode(LED_G, OUTPUT); pinMode(LED_B, OUTPUT); rgb(false, false, false);
-  Wire.begin(); Wire.setWireTimeout(10000, true); Wire.clearWireTimeoutFlag();
   lcdBoot();
   // BootCounter usa região própria da EEPROM (após o journal) e não depende de recover.
   const bool usersRecovered = UserStore::recover(EEPROM);
@@ -774,7 +765,6 @@ void setup() {
   // Diagnóstico de bancada, sem segredos: uma linha por boot.
   Serial.print(F("BOOT boot=")); Serial.print(bootNumber);
   Serial.print(F(" storage=")); Serial.print(storageReady ? F("ok") : F("falha"));
-  Serial.print(F(" lcd=")); Serial.print(lcdReady ? F("ok") : F("timeout"));
   Serial.print(F(" dy50=")); Serial.print(fingerprintReady ? F("ok") : F("indisponivel"));
   Serial.print(F(" lock_mode=")); Serial.println(LOCK_MODE);
 }
@@ -790,5 +780,5 @@ void loop() {
     if (exists(snapshot)) audit("user_snapshot", snapshot, "system");
     ++snapshot;
   }
-  doorTick(); outputsTick(); lcdRecoveryTick(); displayTick(); delay(5);
+  doorTick(); outputsTick(); displayTick(); delay(5);
 }

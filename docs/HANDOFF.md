@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 02/11/2026, sessão 4 e continuação, bancada)
+# Handoff: controle de acesso ESP32 (estado em 03/11/2026, sessão 5; sessões 4 e continuação em 02/11/2026, bancada)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -52,8 +52,11 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
 - Antes de commitar: stage por arquivo, nunca por diretório. Confirme que
   `Config.h`, `*.sqlite3` e `__pycache__` não entram no commit.
 - Commits sem linha `Co-Authored-By`.
+- Em 03/11/2026 há alterações não commitadas sobre o HEAD `f44a926`: firmware do Mega (LCD em 4 bits, `SHOW_TYPED_DIGITS` opt-in, alarme de porta forçada); testes (`tests/test_lcd_4bits.py` novo, testes de I2C removidos, `BuzzerPortaForcadaTests` em `tests/test_mega_tst02.py`); simulação Wokwi (`simulacao/wokwi/`: 3 diagramas, `build.sh`, `LEIAME.md`); documentação (MONTAGEM, MATERIAIS, README, TESTES, ESCOPO, PLANO). Serão commitadas quando o dono pedir. Se houver commit depois, o orquestrador atualiza esta linha. Ver seção 4, sessão 5.
 
 ## 4. O que foi feito em 30/10/2026
+
+Linhas de STATUS/BOOT anteriores a 03/11/2026 trazem o campo `lcd=`, removido do firmware em 03/11.
 
 Auditoria completa com 10 frentes. Cada correção foi implementada e revisada.
 
@@ -61,7 +64,7 @@ Auditoria completa com 10 frentes. Cada correção foi implementada e revisada.
 - Fila não trava com ID maior que 100; evento não codificável é descartado.
 - `storage_error` chega ao servidor mesmo com cadastros corrompidos.
 - DY50 e LCD se recuperam sozinhos. LCD usa sonda I2C e não bloqueia (sonda de
-  barramento no boot e na recuperação: MEGA-10, sessão 2).
+  barramento no boot e na recuperação: MEGA-10, sessão 2) (obsoleto desde 03/11/2026: LCD em 4 bits, sem I2C e sem o campo `lcd=`; ver seção 4, sessão 5).
 - Linha `BOOT` e campo `dy50=` no `STATUS`.
 - UART da CAM é atendida durante hash, EEPROM e LCD, com proteção contra
   reentrância e buffer `linkStash` de 128 B durante reset web.
@@ -135,7 +138,7 @@ Sonnet. Níveis de evidência e números estão em docs/VALIDACAO.md.
   `tests/test_reinicio_perifericos_agent.py` (`test_boot_lcd_ausente_nao_e_inicializado`,
   `test_boot_lcd_presente_inicializa`, `test_boot_com_timeout_fica_sem_lcd`),
   que compilam `lcdPresent`/`lcdBoot` reais do `.ino`. Boot simulado no simavr.
-  LCD real: não verificado.
+  LCD real: não verificado. (obsoleto desde 03/11/2026: LCD em 4 bits, sem I2C e sem o campo `lcd=`; ver seção 4, sessão 5)
 - TST-02 (fechado): `tests/test_mega_tst02.py` (9 testes sobre o código real do
   `.ino`: 7 de TST-02 e 2 de regressão de REQ-E4/B7 para registro corrompido):
   debounce de 50 ms, cores do LED RGB, LCD com ID, teclas D, `*` e `#`,
@@ -203,7 +206,7 @@ Bancada com a dupla. O dono executou tudo na placa; o agente orientou. Níveis e
 - Resistores medidos com o alicate: tira de 4 unidades = 1 kΩ; tira do meio = 10 kΩ; tira de baixo (muitas) = 330 Ω.
 - Montagem na protoboard: buzzer + na trilha 5 V; buzzer - no coletor; emissor no GND; base -> 10 kΩ -> GND; base -> 330 Ω (no lugar do 470 Ω; corrente no D36 de cerca de 13 mA) -> fio de teste. Antes de energizar: trilhas + e - sem continuidade.
 - Testes: fio de teste no 5 V apita (verificado); fio de teste no D36 com o Mega em repouso fica em silêncio (verificado). Fio no GND isolado não foi testado separadamente (equivalente ao D36 em LOW). Acionamento do D36 em HIGH pelo firmware: não verificado nesta sessão; verificado depois, na continuação de 02/11/2026 (EntryExpired, 3 bipes).
-- Análise de código (`DoorLogic.h` e `BuzzerLogic.h`, sem execução): o buzzer só toca em EntryExpired (3 bipes: acesso autorizado sem abrir a porta em 60 s) e em OpenTooLong (bipe a cada 2 s, só a partir do estado Open, isto é, após acesso autorizado e porta aberta por 5 min). ForcedOpen (tirar o jumper de D30/D31) não toca o buzzer; o BuzzerLogic até reseta nesse evento. Logo, o teste do buzzer pelo firmware depende de um usuário cadastrado no DY50 (verificado depois, na continuação de 02/11/2026: EntryExpired, 3 bipes).
+- Análise de código (`DoorLogic.h` e `BuzzerLogic.h`, sem execução): o buzzer só toca em EntryExpired (3 bipes: acesso autorizado sem abrir a porta em 60 s) e em OpenTooLong (bipe a cada 2 s, só a partir do estado Open, isto é, após acesso autorizado e porta aberta por 5 min). ForcedOpen (tirar o jumper de D30/D31) não toca o buzzer; o BuzzerLogic até reseta nesse evento. (obsoleto desde 03/11/2026: ForcedOpen e boot com porta aberta bipam 250 ms / 250 ms; ver seção 4, 03/11) Logo, o teste do buzzer pelo firmware depende de um usuário cadastrado no DY50 (verificado depois, na continuação de 02/11/2026: EntryExpired, 3 bipes).
 - O buzzer fica montado, com o fio de teste no D36.
 
 **LED RGB (pendência de material)**
@@ -293,7 +296,37 @@ Fatos novos (02/11/2026, fim da sessão 4; ver também seção 9):
 - Estado da ponte: a montagem foi iniciada pelo dono (fios no conector POWER do Mega e na CAM), mas a medição do ponto do meio NÃO foi feita e a CAM NÃO foi gravada. O agente não conseguiu confirmar pelas fotos a posição dos 9 resistores. Mega ligado por um hub USB. Fonte YwRobot: chave desligada durante a gravação pelo Mega.
 - Diagramas SVG desta sessão (protoboard completa, projeto completo, gravação pelo PL2303 e pelo Mega) ficaram só no scratchpad da sessão: efêmeros e não versionados. Sugerir ao dono versioná-los em `docs/` numa próxima sessão, se ele quiser.
 
-## 5. Verificação (30/10/2026 e 02/11/2026)
+### Sessão 5 (03/11/2026): LCD em 4 bits, alarme da porta forçada, remontagem
+
+Bancada com o dono e alterações de código ainda não commitadas (seção 3). Níveis em docs/VALIDACAO.md (registros de 03/11/2026). O agente não abriu nenhum `Config.h`; nenhuma senha, PIN, chave ou credencial de Wi-Fi foi registrada.
+
+**Código (análise de código; compilado e verificado em host onde indicado)**
+- LCD 1602 só em modo 4 bits (decisão do dono, 03/11/2026). Biblioteca LiquidCrystal 1.0.7 (embutida na IDE). Pinos padrão: RS = D37, E = D38, D4 a D7 = D39 a D42; RW no GND; V0 no potenciômetro de 10 kΩ; A por resistor de 220 Ω. Podem ser trocados por `#define LCD_PIN_*` no `Config.h` local. Removidos: I2C, Wire, `lcdPresent`, `lcdReady`, `lcdRecoveryTick` e o campo `lcd=` de STATUS e BOOT. PCF8574 não é mais necessário. Um `Config.h` antigo com `LCD_ADDRESS` ou `LCD_PARALLEL` deve continuar compilando (não testado com um `Config.h` antigo; não verificado). `tests/test_lcd_4bits.py` novo e testes de I2C removidos (verificado em host).
+- Wokwi: os três `diagram*.json` passaram ao LCD paralelo; `build.sh` usa LiquidCrystal (sem Wire); `ARDUINO_LIBS` padrão agora é `~/Documents/Arduino/libraries`, porque o caminho antigo em `~/Documents/Codex/...` não existe. Wokwi NÃO executado (Docker desligado): não verificado.
+- `SHOW_TYPED_DIGITS` (opt-in, padrão 0): com `#define SHOW_TYPED_DIGITS 1` no `Config.h` local, só o espelho serial `LCD|` mostra os dígitos digitados; o LCD físico continua mascarado. Não colar logs com essa flag em conversas. Em hardware: não verificado; no boot=59 o espelho ainda estava mascarado, e a conferência por grep do dono mostrou que o define não estava no `Config.h` local.
+- Alarme de porta forçada (decisão do dono, 03/11/2026, bipe rápido): em Alarme sem usuário autorizado ("Feche a porta / Sem autorizacao": ForcedOpen, ou boot com a porta aberta), o buzzer bipa 250 ms ligado e 250 ms desligado, imediatamente, até a porta fechar. Os demais padrões não mudaram. Teste `BuzzerPortaForcadaTests` em `tests/test_mega_tst02.py` (verificado em host). Em hardware: relato do dono, não verificado pelo agente (ver abaixo).
+- Revisões independentes (Sonnet) das três mudanças: sem achados bloqueantes (análise de código; parecer não salvo em arquivo).
+
+**Verificação em host e compilação**
+- Suíte: 152 testes, 151 OK, 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` ('Dispositivo inválido.' em vez de 'JSON inválido ou corpo muito grande.'). A mesma falha ocorre num worktree limpo de `f44a926`, sem as mudanças de 03/11 (verificado em host; não investigada).
+- Compilação `arduino:avr:mega` sobre `Config.example.h` (cópia de trabalho, `--libraries ~/Library/Arduino15/libraries`): 37524 B de flash, 4327 B de RAM, 0 avisos (compilado).
+
+**Bancada de 03/11/2026**
+- Protoboard: o dono refez a montagem principal com fios organizados, numa protoboard diferente (60 ou mais colunas, pelas fotos). As colunas dos registros de 02/11 e dos diagramas 01 e 03 não valem mais (análise de fotos).
+- Lado de cima da YwRobot em uso: NÃO CONFIRMADO, a confirmar com o dono. As instruções de hoje seguiram o diagrama 03 (jumper de cima OFF, 5 V do Mega nas trilhas de cima, 3,3 V embaixo), diferente do "Passo A" de 02/11 (jumper de cima em 5 V, fio 5 V do Mega fora das trilhas). Nunca os dois ao mesmo tempo.
+- Medições sem alimentação (alicate BOMVINK, verificado em hardware): trilha vermelha de cima até azul de cima 1 kΩ; vermelha de baixo até azul de baixo 0,75 kΩ; vermelha de cima até vermelha de baixo 1,75 kΩ (soma das duas; inferência: sem ligação direta entre 5 V e 3,3 V); azul de cima até azul de baixo 2 Ω (GND comum). Continuidade sem apito: lê-se o valor.
+- Divisor do DY50: nas colunas antigas, a leitura até GND foi de 110k (verificado em hardware, leitura). Isso contradiz os 3 kΩ medidos em 02/11 e não foi explicado. Nas colunas novas não foi medido (não verificado). O dono afirma que a ligação do DY50 está correta (não verificado por medição).
+- Mega 1 gravado pelo dono com o firmware de 4 bits (boots 51, 52 e 59 vistos; a gravação exata por boot não foi separada). STATUS sem o campo `lcd=`: `last_id=2 queued=1 dropped=0 replies_dropped=0 dy50=indisponivel lock_mode=0`; depois `BOOT boot=59 storage=ok dy50=ok lock_mode=0` (verificado em hardware).
+- Ciclo com o firmware novo (verificado em hardware): acesso liberado ID 001 pela digital; porta aberta e fechada; "Tempo esgotado"; fila crescendo sem CAM (queued=3); senha mascarada na serial.
+- Alarme de porta forçada: "Feche a porta / Sem autorizacao" com bipe rápido, parando ao fechar a porta. Relato do dono, não verificado pelo agente ("o aviso com a porta aberta funcionou bem"). O padrão 250 ms / 250 ms não foi cronometrado.
+- DY50: "Falha no leitor / Tente novamente" e `dy50=indisponivel` durante o uso; voltou após RESET do Mega (`BOOT ... dy50=ok`), verificado em hardware. Recuperação automática (a cada 10 s, só com a tela de acesso livre, entrada vazia, porta fechada e sem aviso) não confirmada: o dono estava digitando na checagem (não verificado). Hipótese: mau contato na emenda do cabo (inferência). Teste pendente: com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS.
+- Teclado: o dono achou a ligação errada depois da remontagem e está refazendo. Ordem correta: tabela de 02/11 (pinos 1 a 4 = C1 a C4 = D26 a D29; pinos 5 a 8 = R1 a R4 = D22 a D25). Um desenho da Área de Trabalho do dono (protoboard-completa.svg/png, fora do repositório) mostra a ordem dos pinos errada (linhas antes das colunas); vale a tabela. Não verificado nesta data.
+- LCD: não conectado nesta data. Não verificado em hardware.
+- CAM: o dono decidiu gravar pelo segundo Mega como ponte USB-serial, com o mesmo método do diagrama 02 (RESET -> GND no Mega 2; 5 V e GND do Mega 2 só para gravar; IO0-GND; divisor 3+6 x 330 Ω; U0R só depois de medir "002"; U0T no pino 1). O dono informa a fiação pronta; a medição do ponto do meio não foi informada; CAM NÃO gravada (não verificado).
+- Rede da CAM: o Mac está num hotspot do iPhone em 5 GHz e só com IPv6 (IPv4 192.0.0.2/32 via clat46). A CAM (2,4 GHz, IPv4 em SERVER_URL) provavelmente não alcança o servidor assim (inferência). Para testar: iPhone em "Maximizar Compatibilidade"; confirmar o IP do Mac na faixa 172.20.10.x e usar esse IP na URL do `Config.h` da CAM; servidor com `--host 0.0.0.0` (não verificado).
+- Skill `/sistema-embarcado` (do dono, fora do repositório) ainda lista "LiquidCrystal I2C 1.1.2" entre as bibliotecas do Mega; deve passar a LiquidCrystal 1.0.7. Não alterada: depende de autorização do dono.
+
+## 5. Verificação (30/10/2026, 02/11/2026 e 03/11/2026)
 
 | Verificação | Resultado | Evidência |
 |---|---|---|
@@ -327,6 +360,8 @@ Fatos novos (02/11/2026, fim da sessão 4; ver também seção 9):
 | Cadastro, PIN errado, desativação e reativação do ID 2, 02/11/2026 | Cadastro: `LCD\| Cadastrado \| ID 002`; PIN de 10 dígitos errado: `Entrada invalida \| 6 ou 10 digitos`; `D` no menu de desativar: `Cancelado`; desativado: `Acesso negado \| Cadastro inativo`; reativado: `Acesso liberado \| ID 002` | verificado em hardware |
 | DY50 instável durante os ensaios, 02/11/2026 | Várias quedas (`Falha no leitor`, `DY50 fora do ar`, `Cadastro falhou \| Erro de leitura`, `Indisponivel \| Veja DY50/EEPROM`), com recuperação automática na maioria; reinícios do dono (boot 38 a 42). Causa provável: inferência (mau contato na emenda/jumpers) | verificado em hardware (ocorrências); causa: inferência |
 | ESP32-CAM: compilação e gravação, 02/11/2026 | Compilada: 1055085 B de flash e 60608 B de RAM (IDE); 1054989 B e 60608 B (arduino-cli com `--build-path`). Gravação NÃO concluída: chip ESP32-D0WD-V3 identificado; uma tentativa gravou bootloader e partições e falhou em boot_app0; as demais falharam no início ou ao trocar de velocidade | compilado; gravação não verificada (chip identificado em hardware) |
+| Suíte Python (sessão 5), 03/11/2026: `CONTROLE_TEST_LIBS=<pasta das libs de teste> CONTROLE_TEST_STRICT=1 python3 -m unittest discover -s tests -q`. A pasta das libs de teste é temporária; se não existir, regenere com `python3 scripts/bootstrap-test-libs.py` (ver seção 6). | 152 testes: 151 OK, 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (a mesma em worktree limpo do HEAD `f44a926`; não investigada) | verificado em host |
+| Mega `arduino:avr:mega`, arduino-cli, 03/11/2026 (sobre `Config.example.h`, cópia de trabalho) | 37524 B de flash, 4327 B de RAM, 0 avisos | compilado |
 
 Os mesmos números estão registrados em docs/VALIDACAO.md.
 
@@ -351,7 +386,7 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
   que usa `-w`; a variante de avisos troca `-w` por `-Wall -Wextra`):
   `-mmcu=atmega2560 -DF_CPU=16000000L -DARDUINO=10819 -DARDUINO_AVR_MEGA2560 -DARDUINO_ARCH_AVR -Os -g -ffunction-sections -fdata-sections -flto -fno-fat-lto-objects -Wall -Wextra`.
   C++ com `-std=gnu++11 -fpermissive -fno-exceptions -fno-threadsafe-statics`.
-  Compila todo `cores/arduino`, Wire, EEPROM, Keypad, LiquidCrystal_I2C,
+  Compila todo `cores/arduino`, Wire, EEPROM, Keypad, LiquidCrystal_I2C (obsoleto desde 03/11/2026: LCD em 4 bits, sem I2C e sem o campo `lcd=`; ver seção 4, sessão 5),
   Adafruit_Fingerprint, Crypto (SHA256, Hash, Crypto) e SoftwareSerial. Link com
   `-Os -flto -Wl,--gc-sections -lm`. Tamanho por `avr-size` (flash = .text + .data;
   SRAM = .data + .bss). Não é o arduino-cli.
@@ -402,12 +437,24 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 ## 7. Pendências abertas (priorizadas)
 
 Bancada (bloqueios de material). Inventário completo e conferências em `docs/MATERIAIS.md`, "Situação do material do dono (31/10/2026)".
+- Atualizações de 03/11/2026 (sessão 5, seção 4):
+  - Confirmar o lado de cima da YwRobot em uso (OFF com 5 V do Mega nas trilhas, ou jumper em 5 V sem o fio 5 V do Mega; nunca os dois). A confirmar com o dono.
+  - DY50: falhas intermitentes (`dy50=indisponivel`). Testar a recuperação automática (com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS); firmar a emenda do cabo (causa provável: inferência). Medir o divisor nas colunas novas: a leitura de 110k de 03/11 nas colunas antigas contradiz os 3 kΩ de 02/11, e a causa não foi identificada.
+  - Teclado 4x4: refazer a ligação pela tabela de 02/11 (C1 a C4 = pinos 1 a 4 = D26 a D29; R1 a R4 = pinos 5 a 8 = D22 a D25) e conferir as 16 teclas. Não verificado.
+  - LCD 1602 em 4 bits: ligar pela MONTAGEM 3.5, conferir que os pinos 1 e 2 do LCD não estão em curto (a leitura não pode dar 0) e ajustar o contraste no potenciômetro. Não verificado.
+  - Espelho com os dígitos digitados: `#define SHOW_TYPED_DIGITS 1` no `Config.h` local (só bancada) e regravação do Mega 1. Não verificado.
+  - CAM pela ponte do segundo Mega: medir o ponto do meio antes de ligar o U0R; gravar; ver o boot (`CAM boot ... camera=ok`, `CAM wifi conectado`). Não verificado.
+  - Rede da CAM: hotspot do iPhone em 5 GHz e Mac só com IPv6 (inferência: a CAM não alcança o servidor como está). Testar com 2,4 GHz ("Maximizar Compatibilidade"), usar o IP do Mac na faixa 172.20.10.x na URL do `Config.h` da CAM e subir o servidor com `--host 0.0.0.0`. Não verificado.
+  - Wokwi com LCD paralelo: rodar a simulação quando o Docker estiver ligado. Não verificado.
+  - Investigar a falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (também ocorre no HEAD `f44a926` limpo).
+  - Skill `/sistema-embarcado` (fora do repositório, do dono): trocar "LiquidCrystal I2C 1.1.2" por "LiquidCrystal 1.0.7". Depende de autorização do dono.
+  - Commit das mudanças de 03/11/2026 (seção 3): quando o dono pedir; stage por arquivo.
 - CAM (bloqueio atual, 02/11/2026): gravação com sucesso não concluída (seção 4, "ESP32-CAM, 02/11/2026"). Hipóteses por inferência: jumpers, hub USB, adaptador PL2303 clone. Próximo passo: seção 9.
 - Pasta de build da CAM com os segredos do Config.h compilados: apagada pelo orquestrador em 02/11/2026. Amanhã é preciso recompilar (seção 9, passo 3) e apagar a pasta nova depois da gravação, sem abrir os arquivos.
 - Organização física da bancada: fixar as placas, agrupar os fios, usar jumpers curtos e etiquetar. O dono achou a montagem bagunçada (02/11/2026).
 - Alimentação definitiva da CAM: adaptador 9 a 12 V / 1 A na YwRobot, ou bateria 12 V com LM2596 em 5,0 V. Decisão do dono.
 - Corrente da alimentação: adaptador 7 V / 500 mA no limite para CAM + DY50 (estimativa). Medir ou ter fonte com folga antes de ligar os dois juntos; a decisão é do dono.
-- LCD sem módulo I2C: comprar o PCF8574 (atenção ao endereço, 0x27 ou 0x3F; repetir o passo 3 para o LCD).
+- LCD sem módulo I2C: comprar o PCF8574 (atenção ao endereço, 0x27 ou 0x3F; repetir o passo 3 para o LCD). Superado em 03/11/2026: LCD em 4 bits, sem PCF8574 (seção 4, sessão 5).
 - Adaptador da CAM resolvido (31/10/2026): USB-serial PL2303 do dono, reconhecido no Mac (`/dev/cu.usbserial-10`), TX em nível de 3,3 V; passo 1 do roteiro feito (ver `docs/VALIDACAO.md`). A base ESP32-CAM-MB não é mais necessária.
 - Decisão pendente (dono e dupla, na bancada): se a bateria de 12 V e o step-down não chegarem, a única forma de alimentar a CAM seria o pino 5V do adaptador. Isso é exceção à regra da seção 1 do `docs/MONTAGEM.md` (CAM só com fonte própria); serve no máximo para gravar e ver o boot, e a porta USB pode não aguentar o pico do Wi-Fi. Não usar junto com o step-down.
 - Proposta em avaliação (02/11/2026; não executada): alimentar a CAM e o buzzer pela fonte de protoboard YwRobot MB102, com o adaptador de parede de 7 V (corrente do adaptador ainda não informada). Jumper do lado das trilhas de cima em 5V e retirar o fio 5V do Mega da trilha vermelha de cima; o Mega segue só pela USB, com GND comum. Assim a CAM tem fonte própria (regra da seção 1 do `docs/MONTAGEM.md`) e o 5V do adaptador PL2303 não é usado. Condição: corrente do adaptador suficiente (picos da CAM ~500 mA, estimativa; não medidos). A decisão é do dono. Atualizado em 02/11/2026: o passo A foi executado (seção 4, "ESP32-CAM, 02/11/2026"); o fio 5V do Mega saiu da trilha vermelha de cima, e o 5V dessa trilha alimenta o buzzer. A decisão de manter a MB102 como fonte da CAM segue pendente do dono.
@@ -421,7 +468,7 @@ Bancada (bloqueios de material). Inventário completo e conferências em `docs/M
   - Ponto de melhoria do DY50 (não bloqueante; decisão do dono em 02/11/2026: não soldar agora): "soldar as emendas do cabo do DY50 e isolar; prender o cabo". Causa provável das quedas: mau contato na emenda ou nos jumpers (inferência).
   - Ensaios não executados (02/11/2026): reset de senha pela USB (RESET); senhas diferentes e senha repetida no cadastro (o ID 2 usou senhas iguais e novas); medição do pino 35; `*` durante a entrada; digital após senha parcial; credencial de outra pessoa no ciclo; só um sensor pressionado; toque curto; 59 s.
 - Lista de compras consolidada:
-  1. Módulo I2C PCF8574 para LCD 1602 (endereço 0x27; se for PCF8574A, 0x3F, e ajustar `LCD_ADDRESS` no `Config.h` local). O dono achou um no Mercado Livre ("placa adaptadora PCF8574 I2C para display LCD 16x2/20x4").
+  1. Superado em 03/11/2026 (LCD em 4 bits): Módulo I2C PCF8574 para LCD 1602 (endereço 0x27; se for PCF8574A, 0x3F, e ajustar `LCD_ADDRESS` no `Config.h` local). O dono achou um no Mercado Livre ("placa adaptadora PCF8574 I2C para display LCD 16x2/20x4"). Superado em 03/11/2026: LCD em 4 bits, sem PCF8574; item não mais necessário.
   2. Carregador da bateria de 12 V, se não vier junto (conferir também descarga contínua de 3 A ou mais).
   3. No carrinho do dono: bateria 12 V 5200 mAh e 2 step-down LM2596 com display.
 Fechadas na sessão 2 (ver seção 4): MEGA-03, MEGA-04, REQ-E4, TST-02 e MEGA-07.
@@ -494,7 +541,7 @@ física). Números em docs/VALIDACAO.md.
   mostra o evento e a foto visível (320x240), na verificação A1 e reconfirmado
   na revisão das mudanças do painel (verificado em host, navegador local).
 
-- Wokwi (simulado, na nuvem do Wokwi; `simulacao/wokwi/`): Mega com LCD I2C,
+- Wokwi (simulado, na nuvem do Wokwi; `simulacao/wokwi/`): Mega com LCD I2C (obsoleto desde 03/11/2026: LCD em 4 bits, sem I2C e sem o campo `lcd=`; ver seção 4, sessão 5; desde 03/11/2026 os três diagramas estão em paralelo e ainda não foram executados),
   EEPROM, USB e leitura da porta (D30) em dois cenários. Boot com porta fechada:
   `queued=1`. Boot com porta aberta: `queued=2` (device_boot e forced_open). Captura
   do LCD: "Senha ou digital" / "DY50 fora do ar". Teclado com 16 botões em matriz
@@ -525,9 +572,23 @@ Pendente:
 
 ## 9. Próximo passo exato
 
+Próximo passo exato (03/11/2026), em ordem:
+Antes de qualquer passo: `LOCK_MODE=0` no Config.h local, fechadura desconectada, USB e chave da YwRobot desligadas ao mexer na fiação.
+1. Terminar a ligação do teclado pela tabela de 02/11 (seção 4, sessão 4): pinos 1 a 4 = C1 a C4 = D26 a D29; pinos 5 a 8 = R1 a R4 = D22 a D25. Com a USB desligada. Não seguir o desenho da Área de Trabalho.
+2. Confirmar a configuração do lado de cima da YwRobot: jumper OFF com o 5 V do Mega nas trilhas de cima (diagrama 03), ou jumper em 5 V com a fonte e sem o fio 5 V do Mega. Nunca o jumper de cima em 5V E o fio 5V do Mega nas trilhas de cima ao mesmo tempo; nunca o 5V do Mega na trilha de 3,3 V. Leituras esperadas com o alicate BOMVINK (lê cerca de 1 V abaixo): com o jumper de cima OFF, USB desconectada e chave da YwRobot ligada, trilha de baixo "003" e trilha de cima "000"; depois de ligar a USB, trilha de cima "004" ou "005". Conferir com o alicate antes de ligar a USB.
+3. Acrescentar `#define SHOW_TYPED_DIGITS 1` no `Config.h` local (só bancada; não versionar) e regravar o Mega 1 pela IDE (placa "Arduino Mega or Mega 2560"). Conferir no espelho `LCD|` da serial que os dígitos aparecem; o LCD físico segue mascarado. Não colar esses logs no chat. Com a flag ligada, não digitar o PIN de administrador real nem senhas de uso; usar valores de teste. Depois do ensaio, remover a linha do Config.h local e regravar.
+4. Conferir as 16 teclas pelo espelho serial, com a porta fechada (verdes D30/D31 ao GND).
+5. Porta forçada: feito em 03/11/2026 (relato do dono; ver seção 4, sessão 5). Não repetir sem motivo.
+6. DY50: medir o divisor nas colunas novas (valores esperados por cálculo [1 kΩ + 2 kΩ; medidos em 02/11 nas colunas antigas]: coluna do D18 até GND ~3 kΩ; coluna do RX até GND ~2 kΩ) e explicar a leitura de 110k de 03/11; firmar a emenda do cabo; depois, com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS.
+7. LCD 1602 em 4 bits pela MONTAGEM 3.5 (pinos 1 e 2 do LCD sem curto: a leitura não pode dar 0; contraste no potenciômetro de 10 kΩ). Não verificado.
+8. CAM pelo segundo Mega, conforme o bloco de 02/11 mais abaixo (medir o ponto do meio antes de ligar o U0R). Rede: iPhone em "Maximizar Compatibilidade" (2,4 GHz), IP do Mac 172.20.10.x na URL da CAM, servidor com `--host 0.0.0.0`. Só ligar o U0R com leitura "002" no meio do divisor; com "003" ou mais, nunca ligar à CAM. Nunca 5 V em GPIO da CAM; a CAM recebe 5 V só no pino 5V.
+9. Registrar os resultados em `docs/VALIDACAO.md` e `docs/HANDOFF.md`. Commit das mudanças de 03/11 só quando o dono pedir (stage por arquivo).
+
+Estado ao parar (03/11/2026, sessão 5): Mega 1 com o firmware de 4 bits gravado (LCD ainda não ligado); alarme de porta forçada verificado pelo relato do dono; DY50 intermitente, voltou após RESET; teclado sendo refeito pela tabela; lado de cima da YwRobot não confirmado; CAM não gravada (fiação da ponte pelo segundo Mega feita, medição não informada); mudanças não commitadas sobre `f44a926`; `SHOW_TYPED_DIGITS` ainda não ativo na bancada; Wokwi não executado; `LOCK_MODE=0`.
+
 - Remontagem/organização dos cabos: usar `docs/diagramas/` (LEIAME.md). Os SVGs e os geradores em `scripts/diagramas/` servem de base para o dono refazer as conexões.
 
-Próximo passo exato (CAM, ponte pelo Mega, 02/11/2026):
+Próximo passo anterior (CAM, ponte pelo Mega, 02/11/2026; ainda vigente para a CAM (passos 1 a 6, ponte pelo Mega — agora o Mega 2); superado só no restante pelo bloco de 03/11/2026, acima):
 1. Conferir a montagem da ponte pelo desenho e pela lista da seção 4 (fios no conector POWER do Mega e na CAM; RESET -> GND; IO0-GND; 9 resistores de 330 Ω nas colunas 40 a 49; pino 0 -> coluna 40; coluna 49 -> GND; U0T -> pino 1; fio coluna 43 -> U0R ainda NÃO ligado). Chave da YwRobot desligada.
 2. MEDIÇÃO OBRIGATÓRIA ANTES DE LIGAR O U0R (não pular):
    - Montagem: Mega na USB; RESET no GND; fio coluna 43 -> U0R DESLIGADO; medir coluna 43 -> GND com o alicate BOMVINK.
@@ -551,18 +612,18 @@ Próximo passo exato (CAM, ponte pelo Mega, 02/11/2026):
 
 Retomada: a combinar com a dupla do dono (hardware).
 
-Estado ao parar (02/11/2026, sessão 4): Mega gravado com o firmware atual (Config.h local com ADMIN_PIN do dono e LOCK_MODE=0); teclado 4x4 soldado e ligado conforme a tabela da seção 4, sessão 4; D30 e D31 ao GND pela trilha azul de cima da protoboard (GND do Mega), não direto ao pino GND; buzzer montado no circuito com BC546 e fio de teste no D36; LED RGB ausente; DY50 energizado pela MB102 (fonte de parede de 7 V; saída 3,3 V) e comunicando (`dy50=ok`); cadastro do ID 1 feito e acessos pela digital e pela senha verificados (seção 4, continuação); espelho do LCD na serial gravado pelo dono; CAM sem bateria e sem step-down; mudanças do espelho e dos docs commitadas em f461412. Ciclo de porta verificado em 02/11/2026 (seção 4, continuação); pendentes: medição do pino 35 (não feita) e firmar a ligação do DY50.
+Estado ao parar anterior (02/11/2026, sessão 4): Mega gravado com o firmware atual (Config.h local com ADMIN_PIN do dono e LOCK_MODE=0); teclado 4x4 soldado e ligado conforme a tabela da seção 4, sessão 4; D30 e D31 ao GND pela trilha azul de cima da protoboard (GND do Mega), não direto ao pino GND; buzzer montado no circuito com BC546 e fio de teste no D36; LED RGB ausente; DY50 energizado pela MB102 (fonte de parede de 7 V; saída 3,3 V) e comunicando (`dy50=ok`); cadastro do ID 1 feito e acessos pela digital e pela senha verificados (seção 4, continuação); espelho do LCD na serial gravado pelo dono; CAM sem bateria e sem step-down; mudanças do espelho e dos docs commitadas em f461412. Ciclo de porta verificado em 02/11/2026 (seção 4, continuação); pendentes: medição do pino 35 (não feita) e firmar a ligação do DY50.
 
-Estado da CAM ao parar (02/11/2026): compilada (IDE e arduino-cli; ver seção 4); não gravada com sucesso. Config.h local preenchido pelo dono (valores não registrados). Passo A da alimentação feito: fio 5V do Mega retirado da trilha vermelha de cima (registrado aqui; não voltar a ligar nela); jumper de cima da MB102 em 5V (trilha de cima "005", de baixo "003"); trilha de 5 V de cima alimenta o buzzer. Mega só pela USB. Adaptador 7 V / 500 mA. PL2303 com 5 V só para gravar a CAM, fora da protoboard, nunca junto com a MB102 (decisão do dono). Pasta de build da CAM com segredos no scratchpad: apagada pelo orquestrador em 02/11/2026 (seção 7); recompilar amanhã (seção 9). Ponte pelo Mega: medição do ponto do meio não feita; CAM não gravada (seção 4, "Fatos novos"). Commits do dia: f461412 e f75e6cc enviados; as atualizações posteriores de HANDOFF/VALIDACAO (estado da CAM) ainda não commitadas. Nada foi gravado na CAM nem a fechadura foi acionada nesta data.
+Estado da CAM ao parar anterior (02/11/2026): compilada (IDE e arduino-cli; ver seção 4); não gravada com sucesso. Config.h local preenchido pelo dono (valores não registrados). Passo A da alimentação feito: fio 5V do Mega retirado da trilha vermelha de cima (registrado aqui; não voltar a ligar nela); jumper de cima da MB102 em 5V (trilha de cima "005", de baixo "003"); trilha de 5 V de cima alimenta o buzzer. Mega só pela USB. Adaptador 7 V / 500 mA. PL2303 com 5 V só para gravar a CAM, fora da protoboard, nunca junto com a MB102 (decisão do dono). Pasta de build da CAM com segredos no scratchpad: apagada pelo orquestrador em 02/11/2026 (seção 7); recompilar amanhã (seção 9). Ponte pelo Mega: medição do ponto do meio não feita; CAM não gravada (seção 4, "Fatos novos"). Commits do dia: f461412 e f75e6cc enviados; as atualizações posteriores de HANDOFF/VALIDACAO (estado da CAM) ainda não commitadas. Nada foi gravado na CAM nem a fechadura foi acionada nesta data.
 
 Teclado: o diagnóstico das 16 teclas foi feito em 02/11/2026 com um sketch temporário (DiagTeclado, fora do repositório, não versionado): 16 de 16 teclas OK (seção 4, sessão 4). O MegaControlador foi regravado depois do diagnóstico: linha BOOT `BOOT boot=26 storage=ok lcd=timeout dy50=indisponivel lock_mode=0`; o contador foi de 23 para 26, o que indica (inferência pelo contador) que o diagnóstico não alterou a EEPROM. Lição: os jumpers verdes D30/D31 ao GND precisam estar presentes em todos os testes de teclado; sem eles a porta é vista aberta. Conferir se o USB está conectado antes de mexer na fiação. Convenção combinada: preto = GND; vermelho = 5 V (nunca sinal); verde = sensores da porta D30/D31 (e R3 do teclado); demais cores para sinais conforme as tabelas.
 
-Ordem sugerida (a partir de 02/11/2026):
+Ordem sugerida anterior (a partir de 02/11/2026):
 1. Ensaios de `docs/TESTES.md` ainda não executados (os itens marcados como não executados e os ensaios funcionais de bancada), exceto porta forçada e porta aberta por tempo, feitas em 02/11/2026 (seção 4, continuação; `docs/TESTES.md` pode ainda marcá-las como não executadas). Manter os verdes D30/D31 ao GND em todos os testes de porta; sem eles a porta é vista aberta. Conferir `dy50=ok` no STATUS após qualquer reinício.
    - Lado das trilhas de cima da MB102: OFF, medido `000` antes de ligar a USB (ver seção 4, continuação, e `docs/MONTAGEM.md` 3.9). Nunca ligar o 5V do Mega na trilha de 3,3 V. Superado em 02/11/2026 (passo A da CAM): jumper de cima em 5V, com o fio 5V do Mega retirado dessa trilha (ver Estado ao parar).
 2. LED RGB (`docs/MONTAGEM.md` 3.7; módulo ausente em 02/11/2026): quando houver a peça, antes de energizar, verificar se o módulo tem resistores na placa; se não tiver, um resistor por canal, valor pela ficha. Conferir `RGB_COMMON_ANODE` no `Config.h` local (cátodo comum = `false`, como no `Config.example.h`). Pinos: R -> D32, G -> D33, B -> D34, GND -> GND. Checar: boot com LED apagado; em repouso, pisca azul 200 ms a cada 60 s; tirar um jumper de D30 ou D31 (porta aberta sem autorização) deve levar a alarme com vermelho piscando (350 ms) e `forced_open` (queued +1); só o LED, o buzzer não toca nesse caso. Comportamento esperado por análise de código do firmware, não verificado em hardware.
 3. CAM (próximo passo, a combinar com a dupla): integração da ESP32-CAM. Atualizado em 02/11/2026: pacote esp32 3.3.12 e ArduinoJson 7.4.3 instalados no IDE; CAM compilada; gravação não concluída (ver o próximo passo no topo desta seção). Antes (superado): instalar o pacote esp32 3.3.12 no Arduino IDE; alimentação de 5 V com folga (ver a decisão pendente na seção 7); `Config.h` local da CAM preenchido pelo dono (Wi-Fi, URL e chave; o agente não abre esse arquivo); servidor rodando no Mac. Depois, seguir os passos 2, 4 a 7 da seção 5 de `docs/MONTAGEM.md`. O passo 1 já foi feito com o adaptador PL2303. Divisor da CAM com resistores de 330 Ω (seção 7). Alimentação da CAM: proposta pela MB102 (seção 7); passo A executado em 02/11/2026, a decisão final segue com o dono.
-4. LCD: quando o PCF8574 chegar, repetir o passo 3 da seção 5 de `docs/MONTAGEM.md` só para o LCD.
+4. LCD: quando o PCF8574 chegar, repetir o passo 3 da seção 5 de `docs/MONTAGEM.md` só para o LCD. Superado em 03/11/2026: LCD em 4 bits (passo 7 do bloco de 03/11/2026).
 5. Depois, os itens antigos: revisão elétrica opcional (`docs/MONTAGEM.md` e `docs/MATERIAIS.md`), Wokwi com só o buzzer pendente, P2 de verificação de senha, e a falha pré-existente de `tests/test_server.py::test_deeply_nested_json_reports_400`.
 6. Próximo commit: commit f461412 feito e enviado em 02/11/2026; os registros posteriores de 02/11 entram no próximo commit (antes: decisão pendente sobre 12 arquivos não commitados; superado). Stage por arquivo; nada de commit sem o dono decidir.
 

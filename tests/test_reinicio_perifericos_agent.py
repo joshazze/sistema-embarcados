@@ -1,4 +1,4 @@
-"""Exercita a religação do LCD (timeout I2C) e do DY50 (falha de UART) no sketch Mega."""
+"""Exercita a religação do DY50 (falha de UART) e o boot do LCD 4 bits no sketch Mega."""
 import os
 from pathlib import Path
 import subprocess
@@ -19,26 +19,15 @@ MOCKS = r'''
 #define F(s) s
 #define LCD_SERIAL_MIRROR 1
 struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
-bool lcdReady=true;
-constexpr uint8_t LCD_ADDRESS = 0x27;
-// Sonda do LCD: beginTransmission/endTransmission. Barramento com timeout ou LCD ausente (NACK).
-struct FakeWire {
- bool failed=false, busBroken=false, lcdPresent=true; int probes=0;
- void clearWireTimeoutFlag() { failed=false; }
- bool getWireTimeoutFlag() { return failed; }
- void beginTransmission(uint8_t) { ++probes; }
- uint8_t endTransmission() { if (busBroken) { failed=true; return 5; } return lcdPresent ? 0 : 2; }
-} Wire;
 struct FakeLCD {
- int inits=0, backlights=0, writes=0, cursors=0, prints=0; bool failOnWrite=false;
- void init() { ++inits; if (Wire.busBroken) Wire.failed=true; }
- void backlight() { ++backlights; }
- void print(const char *) { ++prints; }
+ int begins=0, writes=0, cursors=0, prints=0; std::string last;
+ void begin(int,int) { ++begins; }
+ void print(const char *s) { ++prints; last = s; }
  void setCursor(int,int) { ++cursors; }
- void write(uint8_t) { ++writes; if (failOnWrite) Wire.failed=true; }
+ void write(uint8_t) { ++writes; }
 } lcd;
 '''
-# Trecho com as funções de religação e displayTick (todas ficam entre doorTick e a lista de UART).
+# Trecho com as funções de religação do DY50, lcdBoot e displayTick (todas ficam entre doorTick e a lista de UART).
 RECOVERY_SLICE = ('// Religa o DY50', '// Lista circular')
 
 
@@ -62,90 +51,12 @@ class ReinicioPerifericosTests(unittest.TestCase):
         recovery = sketch[sketch.index(RECOVERY_SLICE[0]):sketch.index(RECOVERY_SLICE[1])]
         return logic + recovery
 
-    def test_lcd_volta_apos_timeout_quando_barramento_recupera(self):
+    def test_boot_inicializa_lcd_4bits(self):
         cases = r'''
 int main() {
  door.begin(true,now); resetUi(); noticeDuration=0;
- lcd.failOnWrite=true; displayTick(); assert(!lcdReady && lcd.writes==1);
- // Dentro de 30 s nenhuma tentativa de religar
- now+=10000; lcdRecoveryTick(); assert(!lcdReady && lcd.inits==0 && Wire.probes==0);
- // 30 s depois, barramento ainda com timeout: a sonda falha e o LCD não é iniciado
- now+=20000; Wire.busBroken=true; lcdRecoveryTick(); assert(!lcdReady && lcd.inits==0 && Wire.probes==1);
- // Barramento recuperado: na próxima janela de 30 s o LCD volta e é redesenhado por completo
- Wire.busBroken=false; lcd.failOnWrite=false; now+=30000; lcdRecoveryTick();
- assert(lcdReady && lcd.inits==1 && lcd.backlights==1 && Wire.probes==2);
- int before=lcd.writes; now+=500; displayTick();
- assert(lcd.writes==before+32 && lcdPrevA=="Senha ou digital");
- return 0;
-}
-'''
-        self._compile_and_run(self._sketch_body(), cases)
-
-    def test_lcd_redesenha_tela_apos_recuperacao(self):
-        cases = r'''
-int main() {
- door.begin(true,now); resetUi(); noticeDuration=0;
- // Desenho completo com sucesso preenche lcdPrevA/lcdPrevB
- displayTick(); assert(lcdReady && lcd.writes==32 && lcdPrevA=="Senha ou digital");
- // Entrada parcial muda a segunda linha; a falha ocorre na primeira escrita
- now+=200; entry="1"; lcd.failOnWrite=true; displayTick(); assert(!lcdReady && lcd.writes==33);
- // Após 30 s, com teclado vazio e barramento livre, o LCD volta
- entry=""; lcd.failOnWrite=false; now+=30000; lcdRecoveryTick(); assert(lcdReady && lcd.inits==1);
- // A tela é igual à anterior, mas precisa ser redesenhada por completo (lcdPrev limpo)
- int before=lcd.writes; now+=200; displayTick();
- assert(lcd.writes==before+32);
- return 0;
-}
-'''
-        self._compile_and_run(self._sketch_body(), cases)
-
-    def test_lcd_ausente_nao_e_religado(self):
-        cases = r'''
-int main() {
- door.begin(true,now); resetUi(); noticeDuration=0;
- lcdReady=false; Wire.lcdPresent=false;
- // LCD ausente (NACK): a sonda falha, lcd.init não é chamado e o LCD não é considerado religado
- now+=30000; lcdRecoveryTick(); assert(!lcdReady && Wire.probes==1 && lcd.inits==0);
- // Presença voltou, mas a janela de 30 s recomeçou na tentativa anterior
- Wire.lcdPresent=true; now+=10000; lcdRecoveryTick(); assert(!lcdReady && Wire.probes==1);
- now+=20000; lcdRecoveryTick(); assert(lcdReady && Wire.probes==2 && lcd.inits==1);
- return 0;
-}
-'''
-        self._compile_and_run(self._sketch_body(), cases)
-
-    def test_boot_lcd_ausente_nao_e_inicializado(self):
-        cases = r'''
-int main() {
- door.begin(true,now); resetUi(); noticeDuration=0;
- // Boot com LCD ausente (NACK): sonda falha, init/backlight/print não são chamados
- Wire.lcdPresent=false; lcdBoot();
- assert(!lcdReady && Wire.probes==1 && lcd.inits==0 && lcd.backlights==0 && lcd.prints==0);
- // LCD aparece depois: a recuperação religa na janela de 30 s
- Wire.lcdPresent=true; now+=30000; lcdRecoveryTick();
- assert(lcdReady && lcd.inits==1);
- return 0;
-}
-'''
-        self._compile_and_run(self._sketch_body(), cases)
-
-    def test_boot_lcd_presente_inicializa(self):
-        cases = r'''
-int main() {
- door.begin(true,now); resetUi(); noticeDuration=0;
- Wire.lcdPresent=true; lcdBoot();
- assert(lcdReady && Wire.probes==1 && lcd.inits==1 && lcd.backlights==1 && lcd.prints==1);
- return 0;
-}
-'''
-        self._compile_and_run(self._sketch_body(), cases)
-
-    def test_boot_com_timeout_fica_sem_lcd(self):
-        cases = r'''
-int main() {
- door.begin(true,now); resetUi(); noticeDuration=0;
- Wire.busBroken=true; lcdBoot();
- assert(!lcdReady && Wire.probes==1 && lcd.inits==0 && lcd.prints==0);
+ lcdBoot();
+ assert(lcd.begins==1 && lcd.prints==1 && lcd.last=="Iniciando...");
  return 0;
 }
 '''
@@ -175,24 +86,23 @@ int main() {
 '''
         self._compile_and_run(self._sketch_body(), cases)
 
-    def test_recuperacao_respeita_guardas(self):
+    def test_recuperacao_dy50_respeita_guardas(self):
         cases = r'''
 // Cada caso: com a condição ativa nenhuma tentativa; sem ela, a mesma chamada tenta (controle).
 void limpa() {
  door.begin(true,now); resetUi(); noticeDuration=0; buzzer.reset();
- entry=""; fingerprintReady=false; lcdReady=false; finger.verifyOk=false;
- lcd.failOnWrite=false; Wire.busBroken=false; now+=30000;
+ entry=""; fingerprintReady=false; finger.verifyOk=false; now+=30000;
 }
 void bloqueado(const char *caso) {
  fprintf(stderr,"%s\n",caso);
- const int v=finger.verifyCalls, p=Wire.probes, i=lcd.inits;
- fingerprintRecoveryTick(); lcdRecoveryTick();
- assert(finger.verifyCalls==v && Wire.probes==p && lcd.inits==i);
+ const int v=finger.verifyCalls;
+ fingerprintRecoveryTick();
+ assert(finger.verifyCalls==v);
 }
 void liberado() {
- const int v=finger.verifyCalls, i=lcd.inits;
- fingerprintRecoveryTick(); lcdRecoveryTick();
- assert(finger.verifyCalls==v+1 && lcd.inits==i+1 && lcdReady);
+ const int v=finger.verifyCalls;
+ fingerprintRecoveryTick();
+ assert(finger.verifyCalls==v+1);
 }
 int main() {
  limpa(); door.authorize(1,now); assert(door.state==DoorState::AwaitOpen);
@@ -205,11 +115,10 @@ int main() {
  bloqueado("entry nao vazio"); entry=""; liberado();
  limpa(); ui=Ui::Menu;
  bloqueado("tela fora de Access"); resetUi(); liberado();
- // Buzzer ativo bloqueia só o LCD (o DY50 não depende do buzzer)
- limpa(); buzzer.onEvent(DoorEvent::EntryExpired,now);
- fprintf(stderr,"buzzer ativo (somente LCD)\n");
- { const int p=Wire.probes, i=lcd.inits; lcdRecoveryTick(); assert(Wire.probes==p && lcd.inits==i && !lcdReady);
-   buzzer.reset(); lcdRecoveryTick(); assert(lcdReady && lcd.inits==i+1); }
+ // Buzzer ativo não bloqueia o DY50 (só o aviso de buzzer, sem relação com o LCD)
+ limpa(); buzzer.onEvent(DoorEvent::EntryExpired,now); assert(buzzer.isOn(now));
+ fprintf(stderr,"buzzer ativo (DY50 nao depende do buzzer)\n");
+ { const int v=finger.verifyCalls; fingerprintRecoveryTick(); assert(finger.verifyCalls==v+1); }
  return 0;
 }
 '''
