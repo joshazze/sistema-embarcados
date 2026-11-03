@@ -52,7 +52,7 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
 - Antes de commitar: stage por arquivo, nunca por diretório. Confirme que
   `Config.h`, `*.sqlite3` e `__pycache__` não entram no commit.
 - Commits sem linha `Co-Authored-By`.
-- Em 03/11/2026 há alterações não commitadas sobre o HEAD `f44a926`: firmware do Mega (LCD em 4 bits, `SHOW_TYPED_DIGITS` opt-in, alarme de porta forçada); testes (`tests/test_lcd_4bits.py` novo, testes de I2C removidos, `BuzzerPortaForcadaTests` em `tests/test_mega_tst02.py`); simulação Wokwi (`simulacao/wokwi/`: 3 diagramas, `build.sh`, `LEIAME.md`); documentação (MONTAGEM, MATERIAIS, README, TESTES, ESCOPO, PLANO). Serão commitadas quando o dono pedir. Se houver commit depois, o orquestrador atualiza esta linha. Ver seção 4, sessão 5.
+- 03/11/2026: as mudanças da sessão 5 (LCD em 4 bits, SHOW_TYPED_DIGITS, bipe da porta forçada, testes, Wokwi e docs) foram commitadas em `e6a9263` e enviadas para origin/main a pedido do dono.
 
 ## 4. O que foi feito em 30/10/2026
 
@@ -448,7 +448,7 @@ Bancada (bloqueios de material). Inventário completo e conferências em `docs/M
   - Wokwi com LCD paralelo: rodar a simulação quando o Docker estiver ligado. Não verificado.
   - Investigar a falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (também ocorre no HEAD `f44a926` limpo).
   - Skill `/sistema-embarcado` (fora do repositório, do dono): trocar "LiquidCrystal I2C 1.1.2" por "LiquidCrystal 1.0.7". Depende de autorização do dono.
-  - Commit das mudanças de 03/11/2026 (seção 3): quando o dono pedir; stage por arquivo.
+  - Commit das mudanças de 03/11/2026 (seção 3): feito em `e6a9263`, enviado para origin/main a pedido do dono.
 - CAM (bloqueio atual, 02/11/2026): gravação com sucesso não concluída (seção 4, "ESP32-CAM, 02/11/2026"). Hipóteses por inferência: jumpers, hub USB, adaptador PL2303 clone. Próximo passo: seção 9.
 - Pasta de build da CAM com os segredos do Config.h compilados: apagada pelo orquestrador em 02/11/2026. Amanhã é preciso recompilar (seção 9, passo 3) e apagar a pasta nova depois da gravação, sem abrir os arquivos.
 - Organização física da bancada: fixar as placas, agrupar os fios, usar jumpers curtos e etiquetar. O dono achou a montagem bagunçada (02/11/2026).
