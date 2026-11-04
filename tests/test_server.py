@@ -249,6 +249,17 @@ class ServerTests(unittest.TestCase):
         device = self.request("/api/admin/overview")[1]["devices"][0]
         self.assertEqual((device["dropped"], device["rejected"]), (7, 3))
 
+    def test_heartbeat_responde_hora_do_servidor(self):
+        before = int(time.time())
+        code, data = self.heartbeat()
+        after = int(time.time())
+        self.assertEqual(code, 200)
+        self.assertIs(data["ok"], True)
+        self.assertIsInstance(data["server_time"], int)
+        self.assertNotIsInstance(data["server_time"], bool)
+        self.assertLessEqual(before - 5, data["server_time"])
+        self.assertLessEqual(data["server_time"], after + 5)
+
     def test_heartbeat_rejects_invalid_counters(self):
         invalid_values = [-1, 4294967296, True, False, "1", 1.5, None, [], {}]
         for field in ("dropped", "rejected"):

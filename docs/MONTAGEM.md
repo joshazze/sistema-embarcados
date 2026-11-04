@@ -177,6 +177,7 @@ Observações:
   suspeito.
 - Não use o 3V3 da CAM para nada neste projeto.
 - Alternativa com resistores de 330 Ω, porque o dono só tem 4 de 1 kΩ: 3 em série (~1 kΩ) no lugar do 1 kΩ e 6 em série (~2 kΩ) no lugar do 2 kΩ (mesma proporção).
+- Com o D16 do Mega 1, use 3 x 330 Ω em cima e 6 x 330 Ω embaixo (meio medido 3,3 V em 04/11/2026); com só 2 em cima o IO13 receberia ~3,75 V (estimativa).
 
 Antes de energizar:
 
@@ -379,7 +380,7 @@ Observações:
   Se o DY50 for 3,3 V, use um segundo divisor (1 kΩ e 2 kΩ) no D18, como na seção 3.3.
 - Se o nível for incompatível, use conversão de nível para UART. Itens sem uso
   ficam isolados.
-- Mensagens esperadas: "Falha memoria" bloqueia. "DY50 fora do ar" aparece
+- Mensagens esperadas: "Falha memoria" bloqueia. "Digital indispon" aparece
   no LCD se o leitor não responder no boot. Durante o cadastro, um modelo no leitor
   sem registro válido (ID 1 a 100, memória OK) é apagado no primeiro dedo: LCD
   "Slot orfao limpo" / "Recoloque o dedo"; recoloque o dedo. "Slot DY orfao" só
@@ -496,6 +497,20 @@ Alternativa, se um dia for usada a base ESP32-CAM-MB (conferir no produto):
   grave pelo IDE com a placa "AI Thinker ESP32-CAM". Depois, pressione o RST.
 - A medição do passo 1 (TX em 3,3 V) não se aplica à base.
 
+### Partição e OTA
+
+- Grave sempre com o esquema de partição "Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)".
+  No arduino-cli, o fqbn é `esp32:esp32:esp32cam:PartitionScheme=min_spiffs`. O padrão da
+  placa (Huge APP) não tem espaço para OTA.
+- A primeira gravação com OTA é pela serial (passos acima). As seguintes podem ser pela rede:
+  - Na Arduino IDE, escolha a porta de rede "controle-cam" (Mac e CAM na mesma rede).
+  - Ou no terminal, com o IP da CAM:
+    `arduino-cli upload --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --port <IP da CAM> --protocol network --upload-field password=<senha> --input-dir <pasta do build>`
+- A senha OTA fica só no `Config.h` local (`OTA_PASSWORD`). Nunca a coloque no chat nem no repositório.
+- Aviso (04/11/2026): defina `OTA_PASSWORD` no `Config.h` local antes da primeira gravação pela serial. Sem ela, a OTA fica desligada, sem aviso.
+- Aviso (04/11/2026): a troca para min_spiffs regrava a tabela de partições. Por isso a primeira gravação com esse esquema é pela serial.
+- Aviso (04/11/2026): o envio pela rede precisa de python3 no Mac.
+
 ---
 
 ## 5. Roteiro mínimo de bancada
@@ -526,7 +541,7 @@ Use `LOCK_MODE=0`, com a fechadura e o driver desconectados. Siga a ordem.
 
 - Ligue o Mega pelo USB. Coloque os jumpers D30 e D31 em GND para simular porta fechada.
 - No LCD, veja "Iniciando..." e depois "Senha ou digital". Até o passo 7 o DY50 não
-  está ligado, então "DY50 fora do ar" é o esperado nesta fase. "Falha memoria" bloqueia.
+  está ligado, então "Digital indispon" é o esperado nesta fase. "Falha memoria" bloqueia.
 - Abra o monitor serial a 115200, com final de linha "Nova linha" (Newline). Abrir o
   monitor costuma reiniciar o Mega. Aparece uma linha de boot, no formato
   `BOOT boot=<n> storage=ok|falha dy50=ok|indisponivel lock_mode=<n>`.

@@ -248,7 +248,7 @@ void authorize(uint16_t id, const char *method) {
 }
 
 void beginEnrollment() {
-  if (!storageReady || !fingerprintReady) { notice("Indisponivel", "Veja DY50/EEPROM", true); return; }
+  if (!storageReady || !fingerprintReady) { notice("Indisponivel", "Veja digital/mem", true); return; }
   if (lastId >= MAX_USERS) { notice("Limite atingido", "100 IDs em uso", true); return; }
   pendingId = lastId + 1;
   firstPin = ""; entry = ""; enrollReadFails = 0;
@@ -513,7 +513,7 @@ void displayTick() {
   else {
     a = !storageReady ? "Falha memoria" : "Senha ou digital";
     if (entry.length()) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; masked = true; }
-    else b = fingerprintReady ? "# OK * Limpar" : "DY50 fora do ar";
+    else b = fingerprintReady ? "# OK * Limpar" : "Digital indispon";
   }
 #if LCD_SERIAL_MIRROR
   // Espelho na serial USB: o mesmo texto do LCD, inclusive quando o LCD está ausente.

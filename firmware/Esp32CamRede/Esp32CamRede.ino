@@ -6,9 +6,14 @@
 #include <esp_camera.h>
 #include <esp_system.h>
 #include <time.h>
+#include <sys/time.h>
 #include "Config.h"
 #include "SerialFrame.h"
 #include "MessageProtocol.h"
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
+#include <ArduinoOTA.h>
+static_assert(sizeof(OTA_PASSWORD) > 8, "OTA_PASSWORD deve ter pelo menos 8 caracteres");
+#endif
 static_assert(sizeof(DEVICE_ID) <= 33, "DEVICE_ID deve ter no máximo 32 caracteres");
 using namespace MessageProtocol;
 struct Item { EventData event; uint8_t *photo; size_t photoSize; };
@@ -157,6 +162,15 @@ bool sendPhoto(const Item &item, int *status = nullptr) {
 constexpr uint32_t kPermanentRejectWindowMs = 30000;
 constexpr uint32_t kPermanentRetryDelayMs = 2000; // espera antes de reenviar o mesmo item rejeitado (sem descarte)
 bool isPermanentStatus(int status) { return status == 400 || status == 409 || status == 413 || status == 422; }
+// NTP falha sem internet IPv4; usa a hora do servidor. Não mexe no relógio já sincronizado.
+bool applyServerTime(const String &response) {
+  if (time(nullptr)>=1700000000) return false;
+  JsonDocument doc; if (deserializeJson(doc,response)) return false;
+  JsonVariant v=doc["server_time"];
+  if (!v.is<uint32_t>() || v.as<uint32_t>()<1700000000) return false;
+  struct timeval tv={(time_t)v.as<uint32_t>(),0}; settimeofday(&tv,nullptr);
+  return true;
+}
 void networkTask(void *) {
   // Sem economia de energia do Wi-Fi: com o Compartilhamento de Internet do Mac a CAM deixava de receber pacotes.
   WiFi.mode(WIFI_STA); WiFi.setSleep(false); WiFi.setAutoReconnect(true); WiFi.begin(WIFI_SSID,WIFI_PASSWORD);
@@ -173,6 +187,18 @@ void networkTask(void *) {
       if (wifiUp) Serial.printf("CAM wifi conectado %s\n", WiFi.localIP().toString().c_str());
       else Serial.println("CAM wifi desconectado");
     }
+#endif
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
+    static bool otaStarted=false;
+    if (wifiUp && !otaStarted) {
+      otaStarted=true;
+      ArduinoOTA.setHostname("controle-cam"); ArduinoOTA.setPassword(OTA_PASSWORD);
+      ArduinoOTA.onStart([]() { Serial.println("CAM ota inicio"); });
+      ArduinoOTA.onEnd([]() { Serial.println("CAM ota fim"); });
+      ArduinoOTA.onError([](ota_error_t e) { Serial.printf("CAM ota erro %u\n", (unsigned)e); });
+      ArduinoOTA.begin(); Serial.println("CAM ota pronta controle-cam");
+    }
+    if (otaStarted && wifiUp) ArduinoOTA.handle();
 #endif
     if (!wifiUp) {
       if (uxQueueMessagesWaiting(events) && (!reportedFailure || uint32_t(millis()-lastDiagnostic)>=10000)) {
@@ -259,7 +285,8 @@ void networkTask(void *) {
       doc["cam_boot_id"]=camBootId;
       doc["clock_synced"]=time(nullptr)>=1700000000; doc["queued"]=uxQueueMessagesWaiting(events);
       doc["dropped"]=droppedEvents; doc["rejected"]=rejectedItems; doc["photo_rejected"]=photoRejected;
-      String body,response; serializeJson(doc,body); request("/api/device/heartbeat",body,response);
+      String body,response; serializeJson(doc,body);
+      if (request("/api/device/heartbeat",body,response)==200) applyServerTime(response);
     }
     vTaskDelay(pdMS_TO_TICKS(100));
   }

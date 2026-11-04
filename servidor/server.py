@@ -384,7 +384,7 @@ class Handler(BaseHTTPRequestHandler):
                            (data["device"], data["boot_id"], data["clock_synced"], data["queued"], now,
                             counters["dropped"], counters["rejected"], counters["photo_rejected"],
                             previous["dropped"], previous["rejected"], previous["photo_rejected"], cam_boot_id))
-            self.reply(200, {"ok": True})
+            self.reply(200, {"ok": True, "server_time": now})
         elif path == "/api/admin/reset":
             device, user = data.get("device"), data.get("user_id")
             if not (device == self.app.device_id and integer(user, 1, 100)

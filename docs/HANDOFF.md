@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 03/11/2026, sessão 5; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
+# Handoff: controle de acesso ESP32 (estado em 04/11/2026, sessão 6; sessão 5 em 03/11/2026; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -54,6 +54,7 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
 - Commits sem linha `Co-Authored-By`.
 - 03/11/2026: as mudanças da sessão 5 (LCD em 4 bits, SHOW_TYPED_DIGITS, bipe da porta forçada, testes, Wokwi e docs) foram commitadas em `e6a9263` e enviadas para origin/main a pedido do dono.
 - 03/11/2026 (tarde): alterados `firmware/Esp32CamRede/Esp32CamRede.ino` (`WiFi.setSleep(false);` logo após `WiFi.mode(WIFI_STA)` em networkTask()) e `tests/test_camera_network.py` (`setSleep` no mock), commitado no commit da tarde de 03/11 (ver git log).
+- 04/11/2026 (sessão 6): alterados `firmware/MegaControlador/MegaControlador.ino`, `firmware/Esp32CamRede/Esp32CamRede.ino`, `firmware/Esp32CamRede/Config.example.h`, `servidor/server.py`, testes (`tests/test_server.py`, `tests/test_camera_network.py`, `tests/test_cam_ota.py` novo) e docs (`HANDOFF.md`, `VALIDACAO.md`, `TESTES.md`, `MONTAGEM.md`). Commit desta sessão: ver git log (feito pelo orquestrador, a pedido do dono).
 
 ## 4. O que foi feito em 30/10/2026
 
@@ -347,8 +348,8 @@ Bancada com o dono. Níveis em docs/VALIDACAO.md (registros de 03/11/2026, tarde
 - Monitor com IO0 em GND e RST: `rst:0x1 (POWERON_RESET),boot:0x3 (DOWNLOAD_BOOT...)` e `waiting for download`.
 - Chip ESP32-D0WD-V3 rev 3.1, cristal 40 MHz.
 - Pela IDE falhou após "Changing baud rate to 460800" (a ponte não aguenta). Funcionou a 115200 pela linha de comando (cerca de 60 s, 4 partes com "Hash of data verified"):
-  - compilar: `arduino-cli compile --fqbn esp32:esp32:esp32cam --build-path /tmp/camb firmware/Esp32CamRede`
-  - gravar: `arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn esp32:esp32:esp32cam --input-dir /tmp/camb --upload-property upload.speed=115200 firmware/Esp32CamRede`
+  - compilar: `arduino-cli compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede` (desde 04/11/2026; antes: esp32:esp32:esp32cam)
+  - gravar: `arduino-cli upload -p /dev/cu.usbmodemXXXX --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --input-dir /tmp/camb --upload-property upload.speed=115200 firmware/Esp32CamRede` (desde 04/11/2026; antes: esp32:esp32:esp32cam)
   - arduino-cli em "/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli".
   - Antes: IO0 em GND e RST; fechar o Monitor Serial da IDE (ele prende a porta).
 - `/tmp/camb` contém segredos compilados: apagada pelo orquestrador após cada gravação.
@@ -384,7 +385,75 @@ Bancada com o dono. Níveis em docs/VALIDACAO.md (registros de 03/11/2026, tarde
 5. CAM: IO0 solto, apertar RST; esperado "CAM wifi conectado 192.168.2.x"; no painel "ESP32 conectado" e último contato atualizando a cada ~10 s. Conferência no Mac: `ping 192.168.2.2`.
 - Ao desconectar o iPhone: a rede 192.168.2.x cai e a CAM perde o servidor (nada estraga; o firmware continua gravado). Para o Mac voltar à internet normal, desligar o Internet Sharing e reconectar o Wi-Fi do Mac à rede de casa. Na rede de casa o IP do Mac muda e o SERVER_URL da CAM teria de acompanhar; por isso a rede de testes padrão é a do Mac (192.168.2.1 fixo).
 
-## 5. Verificação (30/10/2026, 02/11/2026 e 03/11/2026)
+### Sessão 6 (04/11/2026): LCD, CAM no Mega 1, hora do servidor e OTA
+
+Bancada com o dono e alterações de código. Níveis em docs/VALIDACAO.md (registros de 04/11/2026). O agente não abriu nenhum `Config.h`; nenhuma senha, PIN, chave ou credencial de Wi-Fi foi registrada.
+
+**LCD 1602 em 4 bits (verificado em hardware)**
+- Ligado pelos colegas pela MONTAGEM 3.5. Conferido desligado com Fluke 17B+: continuidade de cada fio LCD -> Mega ok; pinos 1 e 2 = 3 kΩ (sem curto); pares 6-11, 11-12, 12-13 e 13-14 em MΩ.
+- Corrigido: pino 5 (RW) sem fio (estava no GND); potenciômetro mal encaixado (contraste); resistor de 220 Ω da luz de fundo na trilha de 3,3 V da YwRobot (desligada), movido para o 5V do Mega. Luz acendeu.
+- Texto igual ao espelho serial.
+- Uma vez a linha de baixo saiu corrompida ("Digita)lyndis9on") com o LCD na mão; após RESET saiu limpa. Causa provável: mau contato com o LCD sendo manuseado (inferência).
+
+**Textos do LCD trocados (decisão do dono; verificado em hardware)**
+- "DY50 fora do ar" -> "Digital indispon"; "Veja DY50/EEPROM" -> "Veja digital/mem" (16 colunas). Haiku implementou, Sonnet aprovou.
+- Mega 1 regravado pelo dono: `BOOT boot=81 storage=ok dy50=indisponivel lock_mode=0`; espelho "Senha ou digital | Digital indispon".
+
+**DY50 (verificado em hardware, salvo indicação)**
+- Ao ligar a chave da YwRobot, o espelho voltou sozinho a "# OK * Limpar", sem novo BOOT. Recuperação automática verificada; fecha a pendência de 03/11.
+- Acesso pela digital: "Acesso liberado" (relato do dono; não verificado pelo agente).
+
+**YwRobot, lado de cima (pendência de 03/11 resolvida; medição em Ω pelo dono)**
+- Estado final: jumper de cima em 5V; nenhum fio do 5V do Mega nas trilhas de cima (medido sem ligação); trilha de cima alimenta buzzer e CAM; LCD alimentado direto no 5V do Mega 1; jumper de baixo em 3.3 (DY50). Fonte de parede de 7 V no P4.
+- Diagrama novo fora do repositório (scratchpad, efêmero). O desenho da Área de Trabalho (protoboard-completa) segue com a ordem do teclado errada; vale a tabela de 02/11.
+- Teclado não reconferido nesta sessão (não verificado).
+
+**CAM no Mega 1, montagem de uso (verificado em hardware)**
+- Ligação: D16 -> 3 x 330 Ω -> meio -> 6 x 330 Ω -> GND; meio -> IO13; IO14 -> D17; 5V da CAM na trilha de cima (YwRobot); GND comum.
+- Meio do divisor medido com Fluke: 3,3 V.
+- Primeiro os fios estavam em U0R/U0T (errado): painel conectado, sem eventos e queued=1. Trocados para IO13/IO14: eventos e cadastros chegaram.
+- Atenção: com 2 resistores em cima, o IO13 ficaria perto de 3,75 V (estimativa). Com 3 em cima, a ponte do Mega 2 também gravou.
+
+**Rede de teste (verificado em host)**
+- Internet Sharing de "iPhone USB" para Wi-Fi. Foi preciso desconectar o Wi-Fi do Mac do hotspot e trocar para o outro "iPhone USB" da lista.
+- bridge100 192.168.2.1; CAM 192.168.2.2.
+- iPhone pelo cabo entrega só IPv6/clat (192.0.0.2); por isso o NTP falha.
+
+**Hora do servidor (código; decisão do dono, opção 2)**
+- O servidor responde `server_time` no heartbeat. A CAM (`applyServerTime`) acerta o relógio se não estiver sincronizada e o valor for >= 1700000000. NTP mantido. A CAM já repassa a hora ao Mega.
+- Testes novos em `tests/test_server.py` e `tests/test_camera_network.py` (verificado em host). Precisão de cerca de 1 s, a do relógio do Mac (estimativa).
+- Atenção operacional: o servidor precisa ser reiniciado depois de atualizado. O que rodava desde 09:30 não mandava server_time.
+- Depois de reiniciar: `devices.clock_synced=1` e access_granted com horário 2026-11-04 10:16:57 (verificado em hardware, consulta ao banco).
+
+**Foto fim a fim (verificado em hardware)**
+- Foto do acesso recebida pelo servidor (4619 B). Fluxo Mega -> CAM -> servidor com foto verificado.
+
+**Boot e mDNS da CAM (verificado em hardware; mDNS em host)**
+- `CAM boot ... camera=ok`; ping ok; anúncio mDNS `_arduino._tcp` "controle-cam" visto no Mac.
+
+**Gravação da CAM pela ponte do Mega 2 (verificado em hardware)**
+- Porta `/dev/cu.usbmodem101`. Duas falhas "No serial data received", porque o fio laranja (meio do divisor -> U0R) não estava ligado.
+- Depois, 4 partes com "Hash of data verified" (bootloader, partitions, boot_app0 e app de 1115376 B (imagem .bin gravada pelo esptool; inclui cabeçalhos e alinhamento) em 63 s a 115200).
+- Compilação com o Config.h local: 1115232 B (tamanho do sketch informado pela compilação) de 1966080; RAM 65204 B (compilado).
+- Esquema de partição: "Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS)", fqbn `esp32:esp32:esp32cam:PartitionScheme=min_spiffs`.
+- `/tmp/camb` apagada pelo orquestrador.
+
+**OTA (código; decisão do dono)**
+- ArduinoOTA sob a guarda de `OTA_PASSWORD` (Config.h local; 8 ou mais caracteres). Sem a macro, a OTA fica desligada.
+- Hostname `controle-cam`. Esquema de partição obrigatório: min_spiffs.
+- `tests/test_cam_ota.py` novo (verificado em host, por texto).
+- Revisão Sonnet: aprovado com ressalvas, nada bloqueante (análise de código). Bloco compilado com senha de teste: 1115264 B (compilado).
+- Gravação pela rede (OTA) não verificada ainda.
+
+**Suíte e compilação (verificado em host; compilado)**
+- Suíte: 159 testes; 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` (verificado em host).
+- Mega compilado: 37524 B de flash, 4327 B de RAM, 0 avisos no .ino (compilado).
+
+**Decisões do dono**
+- DEVICE_KEY e ADMIN_PIN não foram trocados agora; pendência (b) segue aberta.
+- Mega 2 sai do projeto de uso. Fica só como ponte de gravação; a OTA poderá substituí-la depois do primeiro teste. Até lá, o caminho garantido é a ponte serial do Mega 2 (seção 6).
+
+## 5. Verificação (30/10/2026, 02/11/2026, 03/11/2026 e 04/11/2026)
 
 | Verificação | Resultado | Evidência |
 |---|---|---|
@@ -430,6 +499,25 @@ Bancada com o dono. Níveis em docs/VALIDACAO.md (registros de 03/11/2026, tarde
 | Correção setSleep: revisão independente (Sonnet), 03/11/2026 (tarde) | Aprovada como mitigação de baixo risco | análise de código |
 | NTP na rede do Mac, 03/11/2026 (tarde) | Falha (rede sem internet IPv4) | verificado em hardware (falha); causa: inferência |
 | Foto da CAM ao servidor e UART com o Mega de uso, 03/11/2026 (tarde) | Não executado | não verificado |
+| LCD 1602 em 4 bits, continuidade e ligação, 04/11/2026 | Fluke 17B+ desligado: continuidade de cada fio ok; pinos 1 e 2 = 3 kΩ; pares 6-11, 11-12, 12-13, 13-14 em MΩ; RW corrigido; luz de fundo com o resistor no 5V do Mega; texto igual ao espelho | verificado em hardware |
+| LCD: linha corrompida uma vez, 04/11/2026 | "Digita)lyndis9on" com o LCD na mão; limpa após RESET; causa provável: mau contato (inferência) | verificado em hardware (ocorrência); causa: inferência |
+| Textos do LCD trocados, 04/11/2026 | `BOOT boot=81 storage=ok dy50=indisponivel lock_mode=0`; espelho "Senha ou digital \| Digital indispon" | verificado em hardware |
+| Recuperação automática do DY50, 04/11/2026 | Espelho voltou a "# OK * Limpar" ao ligar a chave da YwRobot, sem novo BOOT | verificado em hardware |
+| Acesso pela digital, 04/11/2026 | "Acesso liberado" (relato do dono) | não verificado pelo agente (relato do dono) |
+| YwRobot, lado de cima, 04/11/2026 | Jumper de cima em 5V; sem ligação entre o 5V do Mega e as trilhas de cima (Ω); trilha de cima alimenta buzzer e CAM | verificado em hardware (medição em Ω pelo dono) |
+| Divisor da CAM no Mega 1, 04/11/2026 | D16 -> 3 x 330 Ω -> meio -> 6 x 330 Ω -> GND; meio medido 3,3 V (Fluke 17B+) | verificado em hardware |
+| Integração IO13/IO14 da CAM, 04/11/2026 | Com U0R/U0T: painel conectado, sem eventos, queued=1. Com IO13/IO14: eventos e cadastros chegaram | verificado em hardware |
+| Gravação da CAM com min_spiffs, 04/11/2026 | Porta `/dev/cu.usbmodem101`; duas falhas "No serial data received" (fio do meio não ligado); depois 4 partes "Hash of data verified"; app 1115376 B (imagem .bin gravada pelo esptool; inclui cabeçalhos e alinhamento) em 63 s a 115200 | verificado em hardware |
+| Compilação da CAM com min_spiffs, 04/11/2026 | 1115232 B (tamanho do sketch informado pela compilação) de 1966080; RAM 65204 B (Config.h local) | compilado |
+| Boot e mDNS da CAM, 04/11/2026 | `CAM boot ... camera=ok`; ping ok; `_arduino._tcp` "controle-cam" visto no Mac | verificado em hardware (boot, ping); verificado em host (mDNS) |
+| Rede de teste, 04/11/2026 | bridge100 192.168.2.1; CAM 192.168.2.2; iPhone pelo cabo só entrega IPv6/clat (192.0.0.2), por isso o NTP falha | verificado em host |
+| Hora do servidor no banco, 04/11/2026 | `devices.clock_synced=1`; access_granted com horário 2026-11-04 10:16:57, depois de reiniciar o servidor | verificado em hardware (consulta ao banco) |
+| Foto do acesso fim a fim, 04/11/2026 | Foto de 4619 B recebida pelo servidor (Mega -> CAM -> servidor) | verificado em hardware |
+| Suíte Python, 04/11/2026 | 159 testes; 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` | verificado em host |
+| Mega `arduino:avr:mega`, 04/11/2026 | 37524 B de flash, 4327 B de RAM, 0 avisos no .ino (sobre Config.example.h) | compilado |
+| OTA da CAM (código), 04/11/2026 | ArduinoOTA sob `OTA_PASSWORD`; hostname `controle-cam`; `tests/test_cam_ota.py` (por texto); bloco compilado com senha de teste: 1115264 B; revisão Sonnet: aprovado com ressalvas | verificado em host (texto); compilado; análise de código |
+| OTA pela rede (gravação), 04/11/2026 | Não executada | não verificado |
+| Teclado 16 teclas após remontagem, 04/11/2026 | Não reconferido nesta sessão | não verificado |
 
 Os mesmos números estão registrados em docs/VALIDACAO.md.
 
@@ -495,9 +583,9 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 
 - ESP32-CAM (02/11/2026): comandos do arduino-cli. Os caminhos reais ficam em pastas de trabalho fora do repositório. Trocar os marcadores `<...>` pelos caminhos. A pasta de build contém os segredos do `Config.h` local e deve ser apagada ao fim.
   1. Compilar, sem gravar, sobre a cópia do sketch `firmware/Esp32CamRede` feita pelo dono em pasta fora do repositório (com `--build-path` para pasta fora do repositório):
-     `arduino-cli compile --fqbn esp32:esp32:esp32cam --build-path <pasta-de-build> <pasta-da-copia-do-sketch>`
+     `arduino-cli compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path <pasta-de-build> <pasta-da-copia-do-sketch>` (desde 04/11/2026; antes: esp32:esp32:esp32cam)
   2. Gravar, com a CAM ligada só pelo PL2303 (5 V e GND), TXD -> U0R, RXD -> U0T, IO0-GND na própria CAM, fora da protoboard e nunca junto com a MB102:
-     `arduino-cli upload -p <porta> --fqbn esp32:esp32:esp32cam --input-dir <pasta-de-build> --upload-property upload.speed=115200 <pasta-da-copia-do-sketch>`
+     `arduino-cli upload -p <porta> --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --input-dir <pasta-de-build> --upload-property upload.speed=115200 <pasta-da-copia-do-sketch>` (desde 04/11/2026; antes: esp32:esp32:esp32cam)
   3. Porta: listar com `ls /dev/cu.usbserial-*` antes de cada tentativa. O nome muda conforme a entrada USB (`-10`, `-130`, `-1230`). A `-130` era do Mega; não reutilizar nome de outra sessão sem conferir.
   4. Velocidade: o padrão do boards.txt (460800) falhou; em uso 115200; 57600 não conectou.
   5. Evitar hub USB no caminho (ioreg mostrou "USB2.0 HUB"): plugar o PL2303 direto no Mac.
@@ -506,6 +594,10 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 ## 7. Pendências abertas (priorizadas)
 
 Bancada (bloqueios de material). Inventário completo e conferências em `docs/MATERIAIS.md`, "Situação do material do dono (31/10/2026)".
+- Atualizações de 04/11/2026 (sessão 6, seção 4):
+  - Fechadas: (a) relógio, resolvido pela hora do servidor (verificado em hardware); (c) divisor medido (3,3 V com 3 x 330 Ω em cima, Fluke 17B+); (d) montagem de uso da CAM no Mega 1, com IO13/IO14 (verificado em hardware); (e) servidor e teste fim a fim, com hora real e foto; lado de cima da YwRobot; LCD em 4 bits (verificado em hardware); recuperação automática do DY50 (verificado em hardware).
+  - Mantidas abertas: (b) trocar ADMIN_PIN e DEVICE_KEY (prioritário; a CAM poderá ser regravada por OTA depois do primeiro teste; até lá, o caminho garantido é a ponte serial do Mega 2, seção 6); teclado 16 teclas após a remontagem (não verificado hoje); `SHOW_TYPED_DIGITS` (não verificado); medir o divisor do DY50 nas colunas novas (não verificado); firmar a emenda do cabo do DY50 (solda ou termorretrátil); Wokwi com LCD paralelo (não executado); falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400`; LED RGB ausente; fechadura (MONTAGEM seção 6); medição do pino 35.
+  - Novas: testar a primeira gravação por OTA (Arduino IDE, porta de rede "controle-cam", ou `arduino-cli upload --protocol network`, com min_spiffs); eventos criados antes do primeiro heartbeat após ligar saem "sem horário" (aceito); lembrar de reiniciar o servidor após atualizar `server.py`; o servidor é a fonte da hora (relógio do Mac); corrigir o desenho da Área de Trabalho (ordem do teclado) se for usado de novo.
 - Atualizações de 03/11/2026 (tarde, seção 4, "Sessão 5, continuação"):
   - (a) Relógio sem sincronização: decidir (servidor fornece a hora, ou rede com internet IPv4 para NTP). Pendente.
   - (b) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor): expostos no chat em 03/11/2026. Pendente, prioritário.
@@ -514,10 +606,10 @@ Bancada (bloqueios de material). Inventário completo e conferências em `docs/M
   - (e) Servidor no Terminal do Mac com ADMIN_PIN e DEVICE_KEY no ambiente, e teste fim a fim. Pendente.
   - CAM gravada, boot e rede: verificados em hardware (seção 4, continuação). Este item substitui os de CAM abaixo.
 - Atualizações de 03/11/2026 (sessão 5, seção 4):
-  - Confirmar o lado de cima da YwRobot em uso (OFF com 5 V do Mega nas trilhas, ou jumper em 5 V sem o fio 5 V do Mega; nunca os dois). A confirmar com o dono.
-  - DY50: falhas intermitentes (`dy50=indisponivel`). Testar a recuperação automática (com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS); firmar a emenda do cabo (causa provável: inferência). Medir o divisor nas colunas novas: a leitura de 110k de 03/11 nas colunas antigas contradiz os 3 kΩ de 02/11, e a causa não foi identificada.
+  - Superado em 04/11/2026 (resolvido, seção 4, sessão 6): confirmar o lado de cima da YwRobot em uso (OFF com 5 V do Mega nas trilhas, ou jumper em 5 V sem o fio 5 V do Mega; nunca os dois). A confirmar com o dono.
+  - DY50: falhas intermitentes (`dy50=indisponivel`). Superado em 04/11/2026 quanto à recuperação automática (verificada em hardware; seção 4, sessão 6); a emenda do cabo segue aberta. Testar a recuperação automática (com "DY50 fora do ar", esperar 15 s sem tocar e mandar STATUS); firmar a emenda do cabo (causa provável: inferência). Medir o divisor nas colunas novas: a leitura de 110k de 03/11 nas colunas antigas contradiz os 3 kΩ de 02/11, e a causa não foi identificada.
   - Teclado 4x4: refazer a ligação pela tabela de 02/11 (C1 a C4 = pinos 1 a 4 = D26 a D29; R1 a R4 = pinos 5 a 8 = D22 a D25) e conferir as 16 teclas. Não verificado.
-  - LCD 1602 em 4 bits: ligar pela MONTAGEM 3.5, conferir que os pinos 1 e 2 do LCD não estão em curto (a leitura não pode dar 0) e ajustar o contraste no potenciômetro. Não verificado.
+  - Superado em 04/11/2026 (LCD ligado e conferido em hardware; seção 4, sessão 6): LCD 1602 em 4 bits, ligar pela MONTAGEM 3.5, conferir que os pinos 1 e 2 do LCD não estão em curto (a leitura não pode dar 0) e ajustar o contraste no potenciômetro. Não verificado.
   - Espelho com os dígitos digitados: `#define SHOW_TYPED_DIGITS 1` no `Config.h` local (só bancada) e regravação do Mega 1. Não verificado.
   - CAM pela ponte do segundo Mega: medir o ponto do meio antes de ligar o U0R; gravar; ver o boot (`CAM boot ... camera=ok`, `CAM wifi conectado`). Superado em 03/11/2026 (tarde): gravada, boot e rede verificados (seção 4, continuação).
   - Rede da CAM: hotspot do iPhone em 5 GHz e Mac só com IPv6 (inferência: a CAM não alcança o servidor como está). Testar com 2,4 GHz ("Maximizar Compatibilidade"), usar o IP do Mac na faixa 172.20.10.x na URL do `Config.h` da CAM e subir o servidor com `--host 0.0.0.0`. Superado em 03/11/2026 (tarde): rede de teste do Mac em 192.168.2.x, painel conectado (seção 4, continuação; checklist na seção 9).
@@ -648,14 +740,38 @@ Pendente:
 
 ## 9. Próximo passo exato
 
-Próximo passo exato (03/11/2026, fim da tarde), em ordem:
+Próximo passo exato (04/11/2026), em ordem:
+0) Antes de qualquer passo: `LOCK_MODE=0` no Config.h local do Mega, fechadura desconectada; USB e chave da YwRobot desligadas ao mexer na fiação.
+1) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor). A CAM poderá ser regravada por OTA depois do primeiro teste (passo 3); até lá, o caminho garantido é a ponte serial do Mega 2 (seção 6). Pendente (seção 7, item b). Valores nunca no chat.
+2) Conferir as 16 teclas do teclado após a remontagem (espelho serial, porta fechada, verdes D30/D31 ao GND). Não verificado.
+3) Testar a OTA de verdade (executável sem esta conversa; pré-requisito: `OTA_PASSWORD` definido no Config.h local da CAM):
+   a) Compilar com o Config.h local (a /tmp/camb foi apagada; recompilar): `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede`.
+   b) Enviar pela rede: na Arduino IDE, escolher a porta de rede "controle-cam"; ou `arduino-cli upload --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --port 192.168.2.2 --protocol network --upload-field password=<senha OTA do Config.h> --input-dir /tmp/camb firmware/Esp32CamRede`. A senha é digitada só no Terminal, nunca no chat.
+   c) Sucesso = envio concluído; a CAM reinicia e volta a responder ping em 192.168.2.2; painel "ESP32 conectado" e relógio sincronizado (`devices.clock_synced=1`).
+   d) Depois, apagar /tmp/camb.
+   e) Se falhar, usar a ponte serial (seção 6) e ver `docs/MONTAGEM.md`, "Partição e OTA".
+   Registrar o resultado em docs/VALIDACAO.md.
+4) Ensaios funcionais de bancada de `docs/TESTES.md` ainda não executados (seção "Ensaios funcionais de bancada").
+5) Só depois, o ensaio da fechadura (`docs/MONTAGEM.md`, seção 6).
+
+Como religar a rede de testes (atualizado em 04/11/2026):
+- iPhone no cabo USB, "Permitir Que Outros Acessem" ligado.
+- Mac: se o Wi-Fi estiver no hotspot do iPhone, desconectar. Internet Sharing de "iPhone USB" para Wi-Fi, 2,4 GHz, só Wi-Fi. Se o bridge100 não aparecer, trocar para o outro "iPhone USB" da lista. `ifconfig bridge100 | grep "inet "` deve mostrar 192.168.2.1.
+- Servidor: reiniciar se `servidor/server.py` mudou. Um servidor anterior à atualização não manda server_time. ADMIN_PIN e DEVICE_KEY só no ambiente, nunca no chat.
+- CAM: "CAM wifi conectado 192.168.2.x" e painel "ESP32 conectado" com último contato atualizando. Hora: `devices.clock_synced=1`.
+
+Estado ao parar (04/11/2026): tudo funcionando fim a fim, com hora real e foto; `LOCK_MODE=0`, fechadura desconectada; ADMIN_PIN e DEVICE_KEY ainda a trocar; OTA não testada pela rede; commit desta sessão: ver git log.
+
+Blocos anteriores, mantidos como histórico.
+
+Próximo passo exato anterior (03/11/2026, fim da tarde), em ordem:
 0) Antes de qualquer passo: `LOCK_MODE=0` no Config.h local do Mega, fechadura desconectada; USB e chave da YwRobot desligadas ao mexer na fiação.
 1) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor); regravar as placas afetadas (Mega 1 pela IDE; CAM pelo método da seção 6, com o divisor medido). Pendente (seção 7, item b). Valores nunca no chat.
 2) Decidir o relógio: o servidor fornece a hora, ou rede com internet IPv4 para NTP (seção 7, item a).
 3) Montagem de uso da CAM no Mega 1 (seção 7, item d), seguindo `docs/MONTAGEM.md` e o passo 5 do bloco de 02/11 (D16 -> divisor -> IO13; IO14 -> D17). Antes, medir o divisor: meio entre 2,5 e 3,3 V (lembrar que o alicate pode ler baixo, seção 4). Sem 5 V em GPIO; 5 V da CAM só pelo pino 5V; lado de cima da YwRobot ainda a confirmar; Mega 2 fora da montagem.
 4) Servidor e rede do Mac: seguir o checklist "Como religar a rede de testes" (seção 4, sessão 5 continuação), passos 1 a 5. Depois, teste fim a fim: `docs/MONTAGEM.md` seção 5, passos 5 a 7.
 
-Como religar a rede de testes (checklist curto; detalhe na seção 4):
+Como religar a rede de testes (checklist anterior, 03/11/2026; detalhe na seção 4):
 - iPhone no cabo USB, "Permitir Que Outros Acessem" ligado.
 - Mac: Internet Sharing de "iPhone USB" para Wi-Fi, 2,4 GHz (canal 1, 6 ou 11), só Wi-Fi; `ifconfig bridge100 | grep "inet "` mostra 192.168.2.1.
 - Servidor no Terminal, com ADMIN_PIN e DEVICE_KEY no ambiente (valores fora do chat).

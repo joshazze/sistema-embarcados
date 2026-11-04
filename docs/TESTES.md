@@ -165,5 +165,8 @@ bibliotecas indicadas no README:
 
 ```sh
 arduino-cli compile --fqbn arduino:avr:mega firmware/MegaControlador
-arduino-cli compile --fqbn esp32:esp32:esp32cam firmware/Esp32CamRede
+arduino-cli compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs firmware/Esp32CamRede
 ```
+
+Desde 04/11/2026 a CAM usa o esquema `min_spiffs`, necessário para a OTA. Sem ele,
+a tabela de partições não tem espaço para OTA (ver `docs/MONTAGEM.md`, seção 4).

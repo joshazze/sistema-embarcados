@@ -4,3 +4,5 @@ constexpr char WIFI_PASSWORD[] = "SUA_SENHA_WIFI";
 constexpr char SERVER_URL[] = "http://192.168.1.100:8080";
 constexpr char DEVICE_KEY[] = "DEFINA_UMA_CHAVE_COM_PELO_MENOS_16_CARACTERES";
 constexpr char DEVICE_ID[] = "porta01";
+// OTA (atualização pelo Wi-Fi): descomente e defina uma senha própria (8+ caracteres). Sem esta linha, a OTA fica desligada.
+// #define OTA_PASSWORD "DEFINA_UMA_SENHA_OTA"

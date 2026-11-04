@@ -402,7 +402,7 @@ int main() {
  // (f) ocioso: senha mascarada, prontidão do DY50 e falha de memória
  entry = "12"; tela("Senha ou digital", "**");
  entry = ""; tela("Senha ou digital", "# OK * Limpar");
- fingerprintReady = false; tela("Senha ou digital", "DY50 fora do ar"); fingerprintReady = true;
+ fingerprintReady = false; tela("Senha ou digital", "Digital indispon"); fingerprintReady = true;
  storageReady = false; tela("Falha memoria", "# OK * Limpar"); storageReady = true;
  // (g) cadastro: senha mascarada
  ui = Ui::FirstPin; entry = "123"; tela("Crie senha (6)", "***");

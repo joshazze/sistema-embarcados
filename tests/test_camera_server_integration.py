@@ -24,6 +24,8 @@ PREFIX = r'''
 #include <cstdint>
 #include <cstdlib>
 #include <cstdio>
+#include <ctime>
+#include <sys/time.h>
 #include <string>
 #include <vector>
 #include <map>

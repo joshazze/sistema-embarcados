@@ -21,6 +21,7 @@ PREFIX = r'''
 #include <map>
 #include <functional>
 #include <ctime>
+#include <sys/time.h>
 #include <cassert>
 #include <ArduinoJson.h>
 #include "MessageProtocol.h"
@@ -52,6 +53,11 @@ std::vector<String> heartbeats;
 std::function<int(const char*,const String&,String&)> requestOverride;
 std::function<int(size_t)> postOverride;
 int eventCode=200; bool wrongAck=false; String failingId;
+// Relógio simulado: time(nullptr) lê simClock; settimeofday grava nele. Corpo de resposta do heartbeat controlável.
+time_t simClock=1800000000; unsigned setTimeCalls=0; String heartbeatResponse="{\"ok\":true}";
+time_t simTime() { return simClock; }
+#define time(x) simTime()
+int settimeofday(const struct timeval *tv, const struct timezone *) { simClock=tv->tv_sec; ++setTimeCalls; return 0; }
 uint32_t millis() { return ticks; }
 #define pdMS_TO_TICKS(x) (x)
 void vTaskDelay(unsigned n) {
@@ -159,10 +165,11 @@ void resetAll() {
  pendingPhoto.active=false; droppedEvents=0; rejectedItems=0; photoRejected=0; lastBoot=1; lastEvent=0;
  cameraReady=false; cameraHasFrame=false; networkReady=true;
  wifiDownFrom=0; wifiDownUntil=0; script.clear();
+ simClock=0; setTimeCalls=0; heartbeatResponse="{\"ok\":true}";
 }
 // Respostas do servidor: só o item em failingId (ou todos, se vazio) recebe eventCode; wrongAck simula ACK divergente.
 int eventResponder(const char *path,const String &body,String &response) {
- if (String(path)=="/api/device/heartbeat") { heartbeats.push_back(body); return 200; }
+ if (String(path)=="/api/device/heartbeat") { heartbeats.push_back(body); response=heartbeatResponse; return 200; }
  if (String(path)!="/api/device/events") return -1;
  ++eventCalls;
  JsonDocument doc; assert(!deserializeJson(doc,body)); String id=doc["event_id"].as<String>();
@@ -402,6 +409,46 @@ int main() {
 '''
 
 
+CASES_HORA_SERVIDOR_ACERTA = CASES_HELPERS + r'''
+int main() {
+ // Sem NTP (relógio em 0) + server_time válido no heartbeat: acerta o relógio; o heartbeat seguinte já diz clock_synced.
+ resetAll(); requestOverride=eventResponder; heartbeatResponse="{\"ok\":true,\"server_time\":1762250000}"; stopAt=120;
+ try { networkTask(nullptr); } catch(int) {}
+ assert(simClock==1762250000 && setTimeCalls==1);
+ assert(heartbeats.size()==1);
+ JsonDocument hb; assert(!deserializeJson(hb,heartbeats.front()));
+ assert(hb["clock_synced"].as<bool>()==false);
+}
+'''
+CASES_HORA_SERVIDOR_INVALIDA = CASES_HELPERS + r'''
+int main() {
+ // Sem server_time, zero, abaixo do limite, string, null, fora de faixa, JSON inválido ou HTTP não 200: nada acontece.
+ for (const char *resp : {"{\"ok\":true}", "{\"ok\":true,\"server_time\":0}", "{\"ok\":true,\"server_time\":123}",
+                          "{\"ok\":true,\"server_time\":\"1762250000\"}", "{\"ok\":true,\"server_time\":null}",
+                          "{\"ok\":true,\"server_time\":1699999999}", "{\"ok\":true,\"server_time\":", "", "[1762250000]"}) {
+  resetAll(); requestOverride=eventResponder; heartbeatResponse=resp; stopAt=120;
+  try { networkTask(nullptr); } catch(int) {}
+  assert(heartbeats.size()==1 && simClock==0 && setTimeCalls==0);
+ }
+ resetAll(); stopAt=120;
+ requestOverride=[&](const char *path,const String &body,String &response)->int {
+  if (String(path)=="/api/device/heartbeat") { heartbeats.push_back(body); response="{\"ok\":true,\"server_time\":1762250000}"; return 500; }
+  return eventResponder(path,body,response);
+ };
+ try { networkTask(nullptr); } catch(int) {}
+ assert(heartbeats.size()==1 && simClock==0 && setTimeCalls==0);
+}
+'''
+CASES_HORA_SERVIDOR_SINCRONIZADO = CASES_HELPERS + r'''
+int main() {
+ // Relógio já sincronizado (NTP ou heartbeat anterior): server_time não altera a hora.
+ resetAll(); simClock=1762200000; requestOverride=eventResponder; heartbeatResponse="{\"ok\":true,\"server_time\":1762250000}"; stopAt=120;
+ try { networkTask(nullptr); } catch(int) {}
+ assert(simClock==1762200000 && setTimeCalls==0 && heartbeats.size()==1);
+}
+'''
+
+
 def build_source(cases, sketch):
     parts = [sketch[sketch.index(start):sketch.index(end)] for start, end in SKETCH_SLICES]
     return PREFIX + SERIAL_MOCK + ''.join(parts) + cases
@@ -450,6 +497,15 @@ class CameraNetworkTests(unittest.TestCase):
 
     def test_resultado_de_reset_400_404_descartado_500_e_rede_mantido(self):
         self._compile_and_run(CASES_RESULTADO_RESET)
+
+    def test_relogio_sem_ntp_acertado_pelo_server_time_do_heartbeat(self):
+        self._compile_and_run(CASES_HORA_SERVIDOR_ACERTA)
+
+    def test_server_time_invalido_ou_ausente_nao_acerta_relogio(self):
+        self._compile_and_run(CASES_HORA_SERVIDOR_INVALIDA)
+
+    def test_relogio_ja_sincronizado_nao_e_alterado_pelo_servidor(self):
+        self._compile_and_run(CASES_HORA_SERVIDOR_SINCRONIZADO)
 
     def test_setup_gera_cam_boot_id_uma_vez(self):
         sketch = (CAM / 'Esp32CamRede.ino').read_text()

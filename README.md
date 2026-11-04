@@ -32,7 +32,7 @@ fotos em SQLite e oferece o painel de administração.
    na seção 1). Inicie o servidor para receber a CAM pela LAN. A porta padrão é
    `8080`; a URL da CAM deve apontar para o IP do computador, não para `127.0.0.1`.
    No próprio computador, o painel abre em `http://127.0.0.1:8080/`.
-4. Compile para `arduino:avr:mega` e `esp32:esp32:esp32cam`. Antes de gravar,
+4. Compile para `arduino:avr:mega` e `esp32:esp32:esp32cam:PartitionScheme=min_spiffs` (na IDE: Tools > Partition Scheme > Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS); ver [montagem](docs/MONTAGEM.md), seção 4, "Partição e OTA"). Antes de gravar,
    confira a placa de programação, os níveis lógicos e a alimentação conforme
    [montagem](docs/MONTAGEM.md). Em Mac ARM sem Rosetta, o compilador AVR Intel
    fornecido para macOS pode não executar; a compilação do Mega foi feita
@@ -189,7 +189,7 @@ removida ao receber o resultado. O histórico nunca contém a senha.
 3. Ferramentas → Placa → Gerenciador de Placas: instale **Arduino AVR Boards** 1.8.8
    (para o Mega 2560) e **esp32 by Espressif Systems** 3.3.12 (para a ESP32-CAM).
 4. Selecione **Arduino Mega or Mega 2560** para `firmware/MegaControlador` e
-   **AI Thinker ESP32-CAM** (`esp32:esp32:esp32cam`) para `firmware/Esp32CamRede`.
+   **AI Thinker ESP32-CAM** (`esp32:esp32:esp32cam:PartitionScheme=min_spiffs`; na IDE, Tools > Partition Scheme > Minimal SPIFFS (1.9MB APP with OTA/128KB SPIFFS); ver `docs/MONTAGEM.md`, seção 4, "Partição e OTA") para `firmware/Esp32CamRede`.
    Confirme a variante da CAM e a pinagem real antes de gravar.
 5. No Gerenciador de Bibliotecas, instale:
 
