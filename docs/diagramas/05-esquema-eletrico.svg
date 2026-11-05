@@ -1,0 +1,252 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="1250" viewBox="0 0 1800 1250" font-family="Helvetica,Arial,sans-serif">
+<rect x="0" y="0" width="1800" height="1250" rx="0" fill="#ffffff" stroke="none" stroke-width="0"/>
+<text x="20" y="34" font-size="22" fill="#111111" text-anchor="start" font-weight="bold">Esquema elétrico - controle de acesso (montagem de uso, verificada em 04/11/2026)</text>
+<text x="20" y="58" font-size="13" fill="#444" text-anchor="start">Não é protoboard: ligações lógicas com rótulos de rede. Itens em laranja CONFERIR não estão confirmados nos registros.</text>
+<rect x="1200" y="80" width="580" height="100" rx="6" fill="#fffbe6" stroke="#8a6d00" stroke-width="1.5"/>
+<text x="1212" y="98" font-size="12" fill="#111111" text-anchor="start" font-weight="bold">Fonte de protoboard YwRobot MB102 (P4 &lt;- fonte de parede 7 V)</text>
+<text x="1212" y="116" font-size="11" fill="#111111" text-anchor="start">Jumper de CIMA em 5V: trilha de cima = +5V YwRobot (cima) (CAM e buzzer).</text>
+<text x="1212" y="132" font-size="11" fill="#d81e1e" text-anchor="start" font-weight="bold">Nenhum fio do 5V do Mega nesta trilha.</text>
+<text x="1212" y="148" font-size="11" fill="#111111" text-anchor="start">Jumper de BAIXO em 3.3: trilha de baixo = +3,3V YwRobot (baixo) (só DY50).</text>
+<text x="1212" y="164" font-size="11" fill="#111111" text-anchor="start">GND comum: Mega, YwRobot (os dois lados), CAM, DY50, LCD, buzzer, botões.</text>
+<rect x="780" y="190" width="240" height="810" rx="8" fill="#eef3fb" stroke="#1e3a8a" stroke-width="2.5"/>
+<text x="900" y="212" font-size="13" fill="#111111" text-anchor="middle" font-weight="bold">ARDUINO MEGA 2560 (Mega 1)</text>
+<text x="900" y="229" font-size="10" fill="#444" text-anchor="middle">alimentado pelo USB do Mac</text>
+<text x="788" y="254" font-size="11" fill="#111111" text-anchor="start">D18 TX1</text>
+<text x="788" y="280" font-size="11" fill="#111111" text-anchor="start">D19 RX1</text>
+<text x="788" y="306" font-size="11" fill="#111111" text-anchor="start">D16 TX2</text>
+<text x="788" y="332" font-size="11" fill="#111111" text-anchor="start">D17 RX2</text>
+<text x="788" y="544" font-size="11" fill="#111111" text-anchor="start">D30 botão 1</text>
+<text x="788" y="570" font-size="11" fill="#111111" text-anchor="start">D31 botão 2</text>
+<text x="788" y="596" font-size="11" fill="#111111" text-anchor="start">D36 buzzer</text>
+<text x="788" y="622" font-size="11" fill="#9a9a9a" text-anchor="start">D35 TRANCA</text>
+<text x="788" y="648" font-size="11" fill="#9a9a9a" text-anchor="start">D32 RGB</text>
+<text x="788" y="674" font-size="11" fill="#9a9a9a" text-anchor="start">D33 RGB</text>
+<text x="788" y="700" font-size="11" fill="#9a9a9a" text-anchor="start">D34 RGB</text>
+<text x="1012" y="254" font-size="11" fill="#111111" text-anchor="end">D22 R1</text>
+<text x="1012" y="278" font-size="11" fill="#111111" text-anchor="end">D23 R2</text>
+<text x="1012" y="302" font-size="11" fill="#111111" text-anchor="end">D24 R3</text>
+<text x="1012" y="326" font-size="11" fill="#111111" text-anchor="end">D25 R4</text>
+<text x="1012" y="350" font-size="11" fill="#111111" text-anchor="end">D26 C1</text>
+<text x="1012" y="374" font-size="11" fill="#111111" text-anchor="end">D27 C2</text>
+<text x="1012" y="398" font-size="11" fill="#111111" text-anchor="end">D28 C3</text>
+<text x="1012" y="422" font-size="11" fill="#111111" text-anchor="end">D29 C4</text>
+<text x="1012" y="466" font-size="11" fill="#111111" text-anchor="end">D37 RS</text>
+<text x="1012" y="490" font-size="11" fill="#111111" text-anchor="end">D38 E</text>
+<text x="1012" y="514" font-size="11" fill="#111111" text-anchor="end">D39 D4</text>
+<text x="1012" y="538" font-size="11" fill="#111111" text-anchor="end">D40 D5</text>
+<text x="1012" y="562" font-size="11" fill="#111111" text-anchor="end">D41 D6</text>
+<text x="1012" y="586" font-size="11" fill="#111111" text-anchor="end">D42 D7</text>
+<text x="788" y="760" font-size="10" fill="#444" text-anchor="start">D0/D1: USB (não usar)</text>
+<text x="788" y="777" font-size="10" fill="#444" text-anchor="start">D20/D21: livres</text>
+<text x="788" y="794" font-size="10" fill="#444" text-anchor="start">Serigrafia do clone troca 18/19:</text>
+<text x="788" y="811" font-size="10" fill="#444" text-anchor="start">medido: pino 18 = TX1</text>
+<polyline points="840,1000 840,1017" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="753.8" y="1017" width="172.4" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="840.0" y="1030" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V Mega -&gt; trilha solta</text>
+<polyline points="1000,1000 1000,1017" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="983.1" y="1017" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="1000.0" y="1030" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<rect x="100" y="190" width="200" height="100" rx="6" fill="#f3fbf3" stroke="#2e7d32" stroke-width="2"/>
+<text x="110" y="207" font-size="12" fill="#111111" text-anchor="start" font-weight="bold">Leitor DY50 (Serial1, 57600)</text>
+<text x="290" y="254" font-size="11" fill="#1e5bd8" text-anchor="end" font-weight="bold">RX</text>
+<text x="290" y="280" font-size="11" fill="#1e5bd8" text-anchor="end" font-weight="bold">TX</text>
+<polyline points="780,250 300,250" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="608" y="244" width="34" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="625.0" y="240" font-size="10" fill="#111111" text-anchor="middle">1 kΩ (TX1 -&gt; RX)</text>
+<circle cx="330" cy="250" r="3.6" fill="#111111"/>
+<polyline points="330,250 330,149" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="324" y="204.0" width="12" height="24" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="340" y="220.0" font-size="10" fill="#111111" text-anchor="start">1 kΩ</text>
+<rect x="324" y="164.0" width="12" height="24" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="340" y="180.0" font-size="10" fill="#111111" text-anchor="start">1 kΩ</text>
+<rect x="313.1" y="131" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="330.0" y="144" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<text x="360" y="200" font-size="11" fill="#d35400" text-anchor="start" font-weight="bold">CONFERIR 1: medir até GND (esperado ~2 kΩ)</text>
+<polyline points="300,276 780,276" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="150,190 150,173" fill="none" stroke="#f28c00" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="73.7" y="155" width="152.6" height="18" rx="4" fill="#fff" stroke="#f28c00" stroke-width="1.3"/>
+<text x="150.0" y="168" font-size="11" fill="#b35900" text-anchor="middle" font-weight="bold">+3,3V YwRobot (baixo)</text>
+<polyline points="260,190 260,173" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="243.1" y="155" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="260.0" y="168" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<polyline points="780,302 252,302 252,316" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="608" y="296" width="64" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="640.0" y="320" font-size="10" fill="#111111" text-anchor="middle">1 kΩ</text>
+<rect x="448" y="296" width="64" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="480.0" y="320" font-size="10" fill="#111111" text-anchor="middle">1 kΩ</text>
+<rect x="308" y="296" width="64" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="340.0" y="320" font-size="10" fill="#111111" text-anchor="middle">1 kΩ</text>
+<rect x="235.1" y="315" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="252.0" y="328" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<text x="640" y="290" font-size="10" fill="#222" text-anchor="middle">1 kΩ (D16 -&gt; meio)</text>
+<text x="410" y="290" font-size="10" fill="#222" text-anchor="middle">2 x 1 kΩ em série até GND</text>
+<circle cx="548" cy="302" r="3.6" fill="#111111"/>
+<text x="556" y="362" font-size="10" fill="#b35900" text-anchor="start" font-weight="bold">nó meio: medir ~3,3 V (CONFERIR 2)</text>
+<polyline points="548,302 548,400 320,400" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="420" y="392" font-size="10" fill="#1e5bd8" text-anchor="middle">IO13 (3,3 V)</text>
+<polyline points="320,430 740,430 740,328 780,328" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="520" y="448" font-size="10" fill="#1e5bd8" text-anchor="middle">IO14 -&gt; D17 (RX2)</text>
+<rect x="120" y="380" width="200" height="100" rx="6" fill="#fff7e6" stroke="#8a5a00" stroke-width="2"/>
+<text x="132" y="396" font-size="12" fill="#111111" text-anchor="start" font-weight="bold">ESP32-CAM (AI-Thinker)</text>
+<text x="312" y="404" font-size="11" fill="#1e5bd8" text-anchor="end" font-weight="bold">IO13</text>
+<text x="312" y="434" font-size="11" fill="#1e5bd8" text-anchor="end" font-weight="bold">IO14</text>
+<text x="132" y="450" font-size="10" fill="#444" text-anchor="start">IO0: solto (GND só para gravar)</text>
+<text x="132" y="466" font-size="10" fill="#444" text-anchor="start">U0R/U0T: sem fio na montagem de uso</text>
+<polyline points="150,480 150,493" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="83.6" y="493" width="132.8" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="150.0" y="506" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V YwRobot (cima)</text>
+<polyline points="290,480 290,493" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="223.6" y="493" width="132.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="290.0" y="506" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND (azul de cima)</text>
+<text x="486" y="520" font-size="10" fill="#444" text-anchor="end">Botões da porta: pull-up interno do Mega, sem resistor</text>
+<polyline points="780,540 616,540" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="616" cy="540" r="3.6" fill="#111111"/>
+<circle cx="556" cy="540" r="3.6" fill="#111111"/>
+<polyline points="556,540 600,526" fill="none" stroke="#111111" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="556,540 512,540" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="478.2" y="531" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="495.1" y="544" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<polyline points="780,566 616,566" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="616" cy="566" r="3.6" fill="#111111"/>
+<circle cx="556" cy="566" r="3.6" fill="#111111"/>
+<polyline points="556,566 600,552" fill="none" stroke="#111111" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="556,566 512,566" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="478.2" y="557" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="495.1" y="570" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<polyline points="780,618 730,618" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4,3"/>
+<polyline points="724,612 736,624" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="736,612 724,624" fill="none" stroke="#9a9a9a" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="780,592 600,592 600,700 570,700" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="538" y="694" width="24" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="550.0" y="690" font-size="10" fill="#111111" text-anchor="middle">330 Ω</text>
+<polyline points="530,700 470,700" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<circle cx="510" cy="700" r="3.6" fill="#111111"/>
+<polyline points="510,700 510,752" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="504" y="764.0" width="12" height="24" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="520" y="780.0" font-size="10" fill="#111111" text-anchor="start">1 kΩ (era 10 kΩ)</text>
+<polyline points="510,800 510,817" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="493.1" y="817" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="510.0" y="830" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<polyline points="470,684 470,716" fill="none" stroke="#222" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="470,690 500,664 500,630" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="470,710 440,732 440,817" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="453.5,722.1 463.4,720.4 458.1,713.2" fill="#000000"/>
+<text x="508" y="650" font-size="12" fill="#111111" text-anchor="start" font-weight="bold">C</text>
+<text x="460" y="697" font-size="12" fill="#111111" text-anchor="end" font-weight="bold">B</text>
+<text x="430" y="760" font-size="12" fill="#111111" text-anchor="end" font-weight="bold">E</text>
+<rect x="423.1" y="817" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="440.0" y="830" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<text x="440" y="862" font-size="10" fill="#444" text-anchor="middle">BC546 (NPN): pinos C-B-E</text>
+<circle cx="500" cy="630" r="3.6" fill="#111111"/>
+<polyline points="364,630 344,630 344,596" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polyline points="396,630 500,630" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="277.6" y="577" width="132.8" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="344.0" y="590" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V YwRobot (cima)</text>
+<text x="420" y="584" font-size="9" fill="#666" text-anchor="start">verificado em 04/11 (documento antigo dizia 5V do Mega)</text>
+<circle cx="380" cy="630" r="16" fill="#ffffff" stroke="#333" stroke-width="1.5"/>
+<text x="380" y="633" font-size="9" fill="#111111" text-anchor="middle" font-weight="bold">BZ</text>
+<text x="352" y="624" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+</text>
+<text x="408" y="624" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">-</text>
+<rect x="1200" y="232" width="220" height="200" rx="6" fill="#f7f7f7" stroke="#444" stroke-width="1.5"/>
+<text x="1204" y="224" font-size="11" fill="#111111" text-anchor="start" font-weight="bold">Teclado 4x4 (sem resistores)</text>
+<polyline points="1020,250 1200,250" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="254" font-size="11" fill="#111111" text-anchor="start">5 R1 (linha)</text>
+<polyline points="1020,274 1200,274" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="278" font-size="11" fill="#111111" text-anchor="start">6 R2 (linha)</text>
+<polyline points="1020,298 1200,298" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="302" font-size="11" fill="#111111" text-anchor="start">7 R3 (linha)</text>
+<polyline points="1020,322 1200,322" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="326" font-size="11" fill="#111111" text-anchor="start">8 R4 (linha)</text>
+<polyline points="1020,346 1200,346" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="350" font-size="11" fill="#111111" text-anchor="start">1 C1 (coluna)</text>
+<polyline points="1020,370 1200,370" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="374" font-size="11" fill="#111111" text-anchor="start">2 C2 (coluna)</text>
+<polyline points="1020,394 1200,394" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="398" font-size="11" fill="#111111" text-anchor="start">3 C3 (coluna)</text>
+<polyline points="1020,418 1200,418" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="422" font-size="11" fill="#111111" text-anchor="start">4 C4 (coluna)</text>
+<rect x="1200" y="452" width="240" height="226" rx="6" fill="#eef8ff" stroke="#245" stroke-width="1.5"/>
+<text x="1200" y="444" font-size="11" fill="#111111" text-anchor="start" font-weight="bold">LCD 1602 em 4 bits (sem I2C)</text>
+<polyline points="1020,462 1200,462" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="466" font-size="11" fill="#111111" text-anchor="start">4 RS</text>
+<polyline points="1020,486 1200,486" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="490" font-size="11" fill="#111111" text-anchor="start">6 E</text>
+<polyline points="1020,510 1200,510" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="514" font-size="11" fill="#111111" text-anchor="start">11 D4</text>
+<polyline points="1020,534 1200,534" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="538" font-size="11" fill="#111111" text-anchor="start">12 D5</text>
+<polyline points="1020,558 1200,558" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="562" font-size="11" fill="#111111" text-anchor="start">13 D6</text>
+<polyline points="1020,582 1200,582" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1210" y="586" font-size="11" fill="#111111" text-anchor="start">14 D7</text>
+<polyline points="1200,606 1168,606" fill="none" stroke="#9a9a9a" stroke-width="3.5" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="6,4"/>
+<text x="1210" y="610" font-size="11" fill="#d81e1e" text-anchor="start" font-weight="bold">5 RW: SEM FIO (deixar solto)</text>
+<text x="1210" y="632" font-size="11" fill="#444" text-anchor="start">7 a 10 (D0 a D3): sem fio</text>
+<text x="1210" y="654" font-size="10" fill="#444" text-anchor="start">Contraste (V0) e luz de fundo (A/K): ao lado</text>
+<text x="1430" y="474" font-size="11" fill="#111111" text-anchor="end">1 VSS</text>
+<text x="1430" y="498" font-size="11" fill="#111111" text-anchor="end">2 VDD</text>
+<text x="1430" y="544" font-size="11" fill="#111111" text-anchor="end">3 V0</text>
+<text x="1430" y="570" font-size="11" fill="#111111" text-anchor="end">15 A</text>
+<text x="1430" y="600" font-size="11" fill="#111111" text-anchor="end">16 K</text>
+<polyline points="1440,470 1462,470" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1462" y="461" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="1478.9" y="474" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<polyline points="1440,494 1462,494" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1462" y="485" width="66.8" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="1495.4" y="498" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V Mega</text>
+<polyline points="1440,540 1614,540" fill="none" stroke="#1e5bd8" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<polygon points="1624,540 1614,534.5 1614,545.5" fill="#1e5bd8"/>
+<polyline points="1440,566 1520,566" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1470" y="560" width="22" height="12" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="1481.0" y="556" font-size="10" fill="#111111" text-anchor="middle">220 Ω</text>
+<rect x="1520" y="557" width="66.8" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="1553.4" y="570" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V Mega</text>
+<polyline points="1440,596 1462,596" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1462" y="587" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="1478.9" y="600" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<rect x="1624" y="500" width="16" height="80" rx="2" fill="#f4e3b5" stroke="#7a5c1e" stroke-width="1.2"/>
+<text x="1648" y="545" font-size="10" fill="#111111" text-anchor="start">10 kΩ</text>
+<polyline points="1632,500 1632,478" fill="none" stroke="#d81e1e" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1598.6" y="460" width="66.8" height="18" rx="4" fill="#fff" stroke="#d81e1e" stroke-width="1.3"/>
+<text x="1632.0" y="473" font-size="11" fill="#d81e1e" text-anchor="middle" font-weight="bold">+5V Mega</text>
+<polyline points="1632,580 1632,612" fill="none" stroke="#000000" stroke-width="2.2" stroke-linejoin="round" stroke-linecap="round"/>
+<rect x="1615.1" y="612" width="33.8" height="18" rx="4" fill="#fff" stroke="#000000" stroke-width="1.3"/>
+<text x="1632.0" y="625" font-size="11" fill="#000000" text-anchor="middle" font-weight="bold">GND</text>
+<text x="1452" y="646" font-size="10" fill="#d81e1e" text-anchor="start" font-weight="bold">No LCD: todo "+5V Mega" = trilha solta (+), do 5V do Mega;</text>
+<text x="1452" y="660" font-size="10" fill="#111111" text-anchor="start">todo "GND" = trilha solta (-), de um GND do Mega.</text>
+<text x="1452" y="674" font-size="10" fill="#111111" text-anchor="start">Potenciômetro ligado por cabos.</text>
+<rect x="1455" y="198" width="325" height="140" rx="6" fill="#ffffff" stroke="#888" stroke-width="1.2"/>
+<text x="1467" y="216" font-size="12" fill="#111111" text-anchor="start" font-weight="bold">Legenda</text>
+<polyline points="1467,236 1497,236" fill="none" stroke="#d81e1e" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1506" y="240" font-size="11" fill="#111111" text-anchor="start">5 V (vermelho)</text>
+<polyline points="1467,256 1497,256" fill="none" stroke="#f28c00" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1506" y="260" font-size="11" fill="#111111" text-anchor="start">3,3 V (laranja)</text>
+<polyline points="1467,276 1497,276" fill="none" stroke="#000000" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1506" y="280" font-size="11" fill="#111111" text-anchor="start">GND (preto)</text>
+<polyline points="1467,296 1497,296" fill="none" stroke="#1e5bd8" stroke-width="3" stroke-linejoin="round" stroke-linecap="round"/>
+<text x="1506" y="300" font-size="11" fill="#111111" text-anchor="start">sinais (azul)</text>
+<polyline points="1467,316 1497,316" fill="none" stroke="#9a9a9a" stroke-width="3" stroke-linejoin="round" stroke-linecap="round" stroke-dasharray="4,3"/>
+<text x="1506" y="320" font-size="11" fill="#111111" text-anchor="start">não ligado / ausente (cinza tracejado)</text>
+<rect x="1200" y="692" width="580" height="166" rx="6" fill="#fff8f0" stroke="#d35400" stroke-width="1.5"/>
+<text x="1212" y="712" font-size="12" fill="#d35400" text-anchor="start" font-weight="bold">Itens CONFERIR (laranja) e não ligados (cinza)</text>
+<text x="1212" y="732" font-size="11" fill="#d35400" text-anchor="start" font-weight="bold">CONFERIR 1: divisor do RX do DY50 (1 kΩ + 1 kΩ até GND): medir.</text>
+<text x="1212" y="748" font-size="11" fill="#d35400" text-anchor="start">   Esperado ~2 kΩ; leitura antiga deu 110 kΩ. Refazer a medição.</text>
+<text x="1212" y="764" font-size="11" fill="#d35400" text-anchor="start" font-weight="bold">CONFERIR 2: divisor da CAM agora 1 kΩ + 2 x 1 kΩ (era 9 x 330 Ω).</text>
+<text x="1212" y="780" font-size="11" fill="#d35400" text-anchor="start">   Ordem: 1 kΩ do D16 ao meio; 2 x 1 kΩ do meio ao GND. Medir ~3,3 V</text>
+<text x="1212" y="796" font-size="11" fill="#d35400" text-anchor="start">   no meio, com o IO13 solto, antes de ligar a CAM.</text>
+<text x="1212" y="812" font-size="11" fill="#666" text-anchor="start">Buzzer: base-GND do BC546 agora 1 kΩ (era 10 kΩ); funciona (análise).</text>
+<text x="1212" y="828" font-size="11" fill="#666" text-anchor="start">Não ligados: fechadura (D35, NÃO LIGAR); LED RGB ausente (D32 a D34).</text>
+<text x="1212" y="844" font-size="11" fill="#666" text-anchor="start">D0/D1 = USB (não usar). D20/D21 livres.</text>
+<rect x="1200" y="872" width="580" height="290" rx="6" fill="#fff1f1" stroke="#d81e1e" stroke-width="2"/>
+<text x="1212" y="894" font-size="14" fill="#d81e1e" text-anchor="start" font-weight="bold">AVISOS</text>
+<text x="1212" y="918" font-size="12" fill="#111111" text-anchor="start">1. NUNCA 5 V em GPIO da ESP32-CAM (ela trabalha em 3,3 V).</text>
+<text x="1212" y="938" font-size="12" fill="#111111" text-anchor="start">2. DY50 só em 3,3 V (ligado em +3,3V YwRobot (baixo)). Nunca 5 V.</text>
+<text x="1212" y="958" font-size="12" fill="#111111" text-anchor="start">3. NENHUM fio do 5V do Mega na trilha de cima da YwRobot.</text>
+<text x="1212" y="978" font-size="12" fill="#111111" text-anchor="start">4. GND comum entre tudo: Mega, YwRobot, CAM, DY50, LCD, buzzer e botões.</text>
+<text x="1212" y="998" font-size="12" fill="#111111" text-anchor="start">5. Fechadura DESCONECTADA: D35 (TRANCA) NÃO LIGAR; LOCK_MODE=0.</text>
+<text x="1212" y="1018" font-size="12" fill="#111111" text-anchor="start">   Só ligar depois do ensaio da MONTAGEM, seção 6.</text>
+<text x="1212" y="1038" font-size="12" fill="#111111" text-anchor="start">6. Antes de energizar: conferir a continuidade de cada fio esticado,</text>
+<text x="1212" y="1058" font-size="12" fill="#111111" text-anchor="start">   com tudo desligado (USB do Mega e fonte da YwRobot).</text>
+<text x="1212" y="1078" font-size="12" fill="#111111" text-anchor="start">7. LCD pino 5 (RW): SEM FIO (solto). Só 4 bits: D4 a D7.</text>
+<text x="60" y="1210" font-size="11" fill="#666" text-anchor="start">Gerado por scripts/diagramas/gen_eletrico.py. Não substitui a conferência na bancada.</text>
+</svg>
