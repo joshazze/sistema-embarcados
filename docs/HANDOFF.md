@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 05/11/2026, sessão 7: rede nova e diagramas; sessão 6 em 04/11/2026; sessão 5 em 03/11/2026; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
+# Handoff: controle de acesso ESP32 (estado em 06/11/2026; sessão 8 em 06/11/2026: rede da casa, IP fixo e primeira OTA; sessão 7 em 05/11/2026: rede nova e diagramas; sessão 6 em 04/11/2026; sessão 5 em 03/11/2026; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -453,7 +453,45 @@ Bancada com o dono e alterações de código. Níveis em docs/VALIDACAO.md (regi
 - DEVICE_KEY e ADMIN_PIN não foram trocados agora; pendência (b) segue aberta.
 - Mega 2 sai do projeto de uso. Fica só como ponte de gravação; a OTA poderá substituí-la depois do primeiro teste. Até lá, o caminho garantido é a ponte serial do Mega 2 (seção 6).
 
-## 5. Verificação (30/10/2026, 02/11/2026, 03/11/2026 e 04/11/2026)
+### Sessão 8 (06/11/2026): rede da casa, IP fixo e primeira OTA
+
+Bancada e rede com o dono. Níveis em docs/VALIDACAO.md (registros de 06/11/2026). Nenhuma senha, PIN, chave ou senha de Wi-Fi foi registrada. O agente não abriu nenhum `Config.h`; a conferência de SSID e senha foi feita por script, sem exibir valores.
+
+**Roteador da casa (relato do dono (telas do roteador))**
+- Roteador TIM Live em 192.168.1.1. A internet sai por 4G Vivo; o lado WAN tem só IPv6 (IPv4 da WAN: "Desconhecido").
+- O dono entrou no painel com o usuário admin. Não há reserva de DHCP: Rede > DHCP mostra só a faixa 192.168.1.100 a 192.168.1.200 e o lease. Funcionalidades: Firewall, Filtro MAC, Filtro IP, Redirecionamento de Portas e DMZ.
+
+**IP fixo do Mac (decisão do dono; verificado em host)**
+- Só na rede MARCILIO&PATY: Wi-Fi > Detalhes > TCP/IP manual, 192.168.1.50/255.255.255.0, roteador 192.168.1.1, DNS 192.168.1.1 orientado (não conferido; o Mac resolveu nomes pelos DNS IPv6 do 4G). Fora da faixa DHCP. Substitui o 192.168.1.170 antigo, que era DHCP.
+- Conferido: en0 em 192.168.1.50, gateway 192.168.1.1, internet ok (HTTP 200).
+
+**Configuração da CAM (verificado em host, parcial)**
+- O dono editou o SERVER_URL do `Config.h` local da CAM para http://192.168.1.50:8080 (o orquestrador conferiu só essa linha).
+- Por script, sem exibir valores: WIFI_SSID e WIFI_PASSWORD do `Config.h` conferem com a rede salva no Keychain do Mac.
+- Firmware compilado às 14:10 em /tmp/camb (1115376 B, min_spiffs); pasta apagada depois.
+
+**OTA (verificado em hardware: primeira OTA do projeto)**
+- `arduino-cli upload --protocol network --port 192.168.2.2` falhou com "Error getting port metadata: port not found: 192.168.2.2 network". Numa execução avulsa o arduino-cli não encontra a porta de rede. Nada foi gravado.
+- Funcionou com espota.py direto no IP da CAM, porta 3232, com a senha lida de forma oculta (`read -s`). Comando na seção 9.
+- Primeira tentativa: autenticou, mas deu timeout no primeiro bloco (0%). Nada foi gravado.
+- Segunda tentativa, com orientação para manter o DY50 desligado, das 15:45:54 às 15:46:17: 100%, "Result: OK", "Success".
+- Feita pela rede de testes: Internet Sharing de "iPhone USB" para Wi-Fi, Mac em 192.168.2.1 e CAM em 192.168.2.2. Foi preciso escolher o outro "iPhone USB" (en7) para o bridge100 aparecer.
+- Avisos: (a) passar a senha por `-a` deixa a senha visível em `ps`; (b) `-d` imprime a senha na linha "Options: Namespace(... auth=...)". Não usar `-d` e não colar essa linha em lugar nenhum.
+
+**CAM na rede da casa (verificado em hardware)**
+- Depois da OTA, a CAM apareceu em 192.168.1.162 (`dns-sd -G v4 controle-cam.local`). O IP pode mudar.
+- O servidor (atalho rodar-servidor-controle.command, escutando 0.0.0.0:8080) registrou o device porta01 com seen_at 15:48:00 e 15:48:10: clock_synced=1, queued=0, dropped=0, rejected=0; heartbeat a cada ~10 s; o dono confirmou no painel 'ESP32 conectado' (verificado em hardware).
+
+**Ping alto (verificado em host; causa: inferência)**
+- Ping Mac -> CAM: 3,2 a 4,0 s na rede da casa. Antes da OTA, na rede de testes: 20 ms a 2,7 s, com perdas.
+- Suspeita: alimentação da CAM no limite (inferência; não medido).
+
+**Reconexão automática (análise de código; não verificado em hardware)**
+- `WiFi.setAutoReconnect(true)` e `WiFi.reconnect()` a cada 15 s em networkTask(). Falta testar o reinício do modem.
+
+**Teclado**: as 16 teclas continuam sem reconferência após a remontagem de 04/11/2026.
+
+## 5. Verificação (30/10/2026, 02/11/2026, 03/11/2026, 04/11/2026 e 06/11/2026)
 
 | Verificação | Resultado | Evidência |
 |---|---|---|
@@ -516,8 +554,19 @@ Bancada com o dono e alterações de código. Níveis em docs/VALIDACAO.md (regi
 | Suíte Python, 04/11/2026 | 159 testes; 1 falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400` | verificado em host |
 | Mega `arduino:avr:mega`, 04/11/2026 | 37524 B de flash, 4327 B de RAM, 0 avisos no .ino (sobre Config.example.h) | compilado |
 | OTA da CAM (código), 04/11/2026 | ArduinoOTA sob `OTA_PASSWORD`; hostname `controle-cam`; `tests/test_cam_ota.py` (por texto); bloco compilado com senha de teste: 1115264 B; revisão Sonnet: aprovado com ressalvas | verificado em host (texto); compilado; análise de código |
-| OTA pela rede (gravação), 04/11/2026 | Não executada | não verificado |
+| OTA pela rede (gravação), 04/11/2026 | Não executada. Superado em 06/11/2026: feita por espota.py (linhas de 06/11) | não verificado em 04/11; verificado em hardware em 06/11/2026 |
 | Teclado 16 teclas após remontagem, 04/11/2026 | Não reconferido nesta sessão | não verificado |
+| Roteador da casa, sem reserva DHCP, 06/11/2026 | Sem reserva; faixa DHCP 192.168.1.100 a .200 com lease; Funcionalidades: Firewall, Filtro MAC, Filtro IP, Redirecionamento de Portas, DMZ | relato do dono (telas do roteador) |
+| IP fixo do Mac na MARCILIO&PATY, 06/11/2026 | en0 192.168.1.50; gateway 192.168.1.1; internet ok (HTTP 200) | verificado em host |
+| SSID e senha de Wi-Fi da CAM x Keychain, 06/11/2026 | Iguais (script, valores não exibidos); SERVER_URL http://192.168.1.50:8080 (linha conferida pelo orquestrador) | verificado em host |
+| Compilação da CAM com min_spiffs (OTA), 06/11/2026 | 1115376 B; /tmp/camb apagada depois | compilado |
+| OTA via arduino-cli `--protocol network`, 06/11/2026 | Falhou: "port not found: 192.168.2.2 network"; nada gravado | verificado em host (falha) |
+| OTA via espota.py, 1a tentativa, 06/11/2026 | Autenticou; timeout em 0%; nada gravado | verificado em hardware (falha) |
+| OTA via espota.py, 2a tentativa, 06/11/2026 (15:45:54 a 15:46:17) | 100%, "Result: OK", "Success". Primeira OTA do projeto | verificado em hardware |
+| CAM na rede da casa e servidor, 06/11/2026 | CAM em 192.168.1.162; porta01 seen_at 15:48:00 e 15:48:10; clock_synced=1; queued=0; dropped=0; rejected=0; heartbeat a cada ~10 s; o dono confirmou no painel 'ESP32 conectado' (verificado em hardware) | verificado em hardware |
+| Ping Mac -> CAM, 06/11/2026 | 3,2 a 4,0 s (antes da OTA, rede de testes: 20 ms a 2,7 s, com perdas) | verificado em host (medição); causa suspeita (alimentação): inferência |
+| Reconexão automática da CAM, 06/11/2026 | Código: setAutoReconnect(true) e reconnect() a cada 15 s | análise de código; não verificado em hardware |
+| Teclado 16 teclas após remontagem, 06/11/2026 | Não reconferido (continua pendente) | não verificado |
 
 Os mesmos números estão registrados em docs/VALIDACAO.md.
 
@@ -593,13 +642,19 @@ Os mesmos números estão registrados em docs/VALIDACAO.md.
 
 ## 7. Pendências abertas (priorizadas)
 
-- 05/11/2026: (i) trocar a CAM para o roteador MARCILIO&PATY por OTA (seção 9, passo B; primeira OTA pela rede); (ii) medir o meio do novo divisor da CAM (1 kΩ + 2 x 1 kΩ) antes de ligar o IO13; (iii) resistor base-GND do BC546 trocado pelo dono de 10 kΩ para 1 kΩ (análise: funciona, ~13 mA no D36; não verificado em hardware); (iv) LCD alimentado por uma trilha solta separada (+ = 5V do Mega, - = GND do Mega), potenciômetro por cabos; medir continuidade da trilha de ponta a ponta (não verificado); (v) diagramas novos 05 (atualizado) e 06 e geradores gen_eletrico.py/gen_montagem_visual.py ainda sem commit; (vi) atalho do servidor na Mesa corrigido para o novo caminho do repositório (~/Desktop/Sistemas embarcados/controle-acesso-esp32).
+- 06/11/2026 (sessão 8, atual):
+  - (1) Passo A (medir o divisor da CAM) antes de ligar o IO13: o registro de 04/11 (meio em 3,3 V, Fluke 17B+) refere-se ao divisor ANTIGO (3 x 330 Ω + 6 x 330 Ω); em 05/11 o divisor foi trocado para 1 kΩ + 2 x 1 kΩ e o meio do divisor NOVO nunca foi medido. Manter o IO13 solto até medir com o Fluke 17B+.
+  - (2) Trocar OTA_PASSWORD e DEVICE_KEY (a senha OTA apareceu no chat em 06/11/2026; valores nunca no chat). Prioritário. ADMIN_PIN segue pendente (item (b) de 04/11).
+  - (3) Reconferir as 16 teclas do teclado (não verificado desde a remontagem de 04/11).
+  - (4) Testar o reinício do modem (reconexão automática da CAM; não verificado).
+  - (5) Investigar o ping alto (3,2 a 4,0 s) e a alimentação da CAM (suspeita, inferência).
+- 05/11/2026: (i) [superado em 06/11/2026: feito] trocar a CAM para o roteador MARCILIO&PATY por OTA (seção 9, passo B; primeira OTA pela rede); (ii) medir o meio do novo divisor da CAM (1 kΩ + 2 x 1 kΩ) antes de ligar o IO13; (iii) resistor base-GND do BC546 trocado pelo dono de 10 kΩ para 1 kΩ (análise: funciona, ~13 mA no D36; não verificado em hardware); (iv) LCD alimentado por uma trilha solta separada (+ = 5V do Mega, - = GND do Mega), potenciômetro por cabos; medir continuidade da trilha de ponta a ponta (não verificado); (v) diagramas novos 05 (atualizado) e 06 e geradores gen_eletrico.py/gen_montagem_visual.py ainda sem commit; (vi) atalho do servidor na Mesa corrigido para o novo caminho do repositório (~/Desktop/Sistemas embarcados/controle-acesso-esp32).
 
 Bancada (bloqueios de material). Inventário completo e conferências em `docs/MATERIAIS.md`, "Situação do material do dono (31/10/2026)".
 - Atualizações de 04/11/2026 (sessão 6, seção 4):
   - Fechadas: (a) relógio, resolvido pela hora do servidor (verificado em hardware); (c) divisor medido (3,3 V com 3 x 330 Ω em cima, Fluke 17B+); (d) montagem de uso da CAM no Mega 1, com IO13/IO14 (verificado em hardware); (e) servidor e teste fim a fim, com hora real e foto; lado de cima da YwRobot; LCD em 4 bits (verificado em hardware); recuperação automática do DY50 (verificado em hardware).
   - Mantidas abertas: (b) trocar ADMIN_PIN e DEVICE_KEY (prioritário; a CAM poderá ser regravada por OTA depois do primeiro teste; até lá, o caminho garantido é a ponte serial do Mega 2, seção 6); teclado 16 teclas após a remontagem (não verificado hoje); `SHOW_TYPED_DIGITS` (não verificado); medir o divisor do DY50 nas colunas novas (não verificado); firmar a emenda do cabo do DY50 (solda ou termorretrátil); Wokwi com LCD paralelo (não executado); falha pré-existente em `tests/test_server.py::test_deeply_nested_json_reports_400`; LED RGB ausente; fechadura (MONTAGEM seção 6); medição do pino 35.
-  - Novas: testar a primeira gravação por OTA (Arduino IDE, porta de rede "controle-cam", ou `arduino-cli upload --protocol network`, com min_spiffs); eventos criados antes do primeiro heartbeat após ligar saem "sem horário" (aceito); lembrar de reiniciar o servidor após atualizar `server.py`; o servidor é a fonte da hora (relógio do Mac); corrigir o desenho da Área de Trabalho (ordem do teclado) se for usado de novo.
+  - Novas: [superado em 06/11/2026: OTA feita por espota.py, seção 4, sessão 8] testar a primeira gravação por OTA (Arduino IDE, porta de rede "controle-cam", ou `arduino-cli upload --protocol network`, com min_spiffs); eventos criados antes do primeiro heartbeat após ligar saem "sem horário" (aceito); lembrar de reiniciar o servidor após atualizar `server.py`; o servidor é a fonte da hora (relógio do Mac); corrigir o desenho da Área de Trabalho (ordem do teclado) se for usado de novo.
 - Atualizações de 03/11/2026 (tarde, seção 4, "Sessão 5, continuação"):
   - (a) Relógio sem sincronização: decidir (servidor fornece a hora, ou rede com internet IPv4 para NTP). Pendente.
   - (b) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor): expostos no chat em 03/11/2026. Pendente, prioritário.
@@ -742,16 +797,32 @@ Pendente:
 
 ## 9. Próximo passo exato
 
-Próximo passo exato (05/11/2026), assim que a bancada for religada (antes dos itens de 04/11 abaixo):
+Próximo passo exato (06/11/2026), em ordem:
+Estado: CAM na rede MARCILIO&PATY (192.168.1.162 em 06/11; o IP pode mudar); servidor no Mac em 192.168.1.50 (escutando 0.0.0.0:8080); heartbeats com clock_synced=1. O passo B de 05/11 foi concluído em 06/11 (primeira OTA, verificada em hardware).
+- Rede padrão: MARCILIO&PATY, com o Mac em 192.168.1.50 fixo (Wi-Fi > Detalhes > TCP/IP manual; fora da faixa DHCP 100 a 200). A rede de testes do iPhone (192.168.2.x) fica só como plano B para OTA.
+- OTAs futuras: espota.py direto no IP da CAM na rede da casa, achado com `dns-sd -G v4 controle-cam.local` (o IP pode mudar). `arduino-cli upload --protocol network` numa execução avulsa falhou em 06/11; não usar. Compilar com min_spiffs em pasta fora do repositório e depois rodar, numa linha:
+  `read -s "OTA?Senha OTA: " && echo && python3 ~/Library/Arduino15/packages/esp32/hardware/esp32/3.3.12/tools/espota.py -i <IP da CAM> -p 3232 -a "$OTA" -f <pasta-de-build>/Esp32CamRede.ino.bin -r; unset OTA`
+  A senha OTA é digitada escondida, nunca no chat. Não usar `-d`. Apagar a pasta de build depois.
+- Ordem:
+  (1) Passo A (medir o divisor da CAM) antes de ligar o IO13: o registro de 04/11 (meio em 3,3 V, Fluke 17B+) refere-se ao divisor ANTIGO (3 x 330 Ω + 6 x 330 Ω); em 05/11 o divisor foi trocado para 1 kΩ + 2 x 1 kΩ e o meio do divisor NOVO nunca foi medido. Manter o IO13 solto até medir com o Fluke 17B+.
+  (2) Trocar OTA_PASSWORD e DEVICE_KEY por OTA (DEVICE_KEY também no comando do servidor). Valores nunca no chat. ADMIN_PIN, do Mega, segue pendente (seção 7, item b).
+  (3) Reconferir as 16 teclas (espelho serial, porta fechada, verdes D30/D31 ao GND).
+  (4) Testar o reinício do modem: a CAM deve voltar sozinha ("CAM wifi conectado" e heartbeat voltando).
+  (5) Ensaios funcionais de bancada de `docs/TESTES.md`, ainda não executados.
+  (6) Fechadura por último (`docs/MONTAGEM.md`, seção 6), com LOCK_MODE=0 até lá.
+- Fora da ordem: investigar o ping alto (3,2 a 4,0 s) e a alimentação da CAM (fonte 7 V / 500 mA).
+- Estado ao parar (06/11/2026): CAM na MARCILIO&PATY com heartbeat e clock_synced=1; OTA_PASSWORD, DEVICE_KEY e ADMIN_PIN a trocar; 16 teclas por reconferir; LOCK_MODE=0 (regra da seção 2). Docs desta sessão não commitados.
+
+Próximo passo exato (05/11/2026; passo B superado em 06/11/2026, ver bloco acima; mantido como histórico), assim que a bancada for religada (antes dos itens de 04/11 abaixo):
 A) Religar pela montagem nova (docs/diagramas/06-montagem-visual.svg e 05-esquema-eletrico.svg; imagens também na Mesa do dono). Com o Mega ligado e o fio do IO13 SOLTO, medir o meio do divisor da CAM (agora 1 kΩ do D16 ao meio + 2 x 1 kΩ do meio ao GND; coluna 26 no desenho): esperado ~3,3 V. (o D16 fica em nível alto em repouso com o firmware do Mega rodando e o link parado; medir entre o meio e o GND). Só então ligar o IO13.
-B) Trocar a CAM para o roteador novo (MARCILIO&PATY, 2,4 GHz canal 10, WPA/WPA2) por OTA. Estado: Config.h local da CAM já editado pelo dono (WIFI_SSID, WIFI_PASSWORD, SERVER_URL http://192.168.1.170:8080); cópia do Config.h antigo em ~/Desktop/Sistemas embarcados/Config-cam-rede-mac.h (fora do repo); firmware compilado em /tmp/camb às 09:48 de 05/11 (imagem Esp32CamRede.ino.bin de 1115376 B, por ls; se /tmp/camb sumir, recompilar da raiz do repositório com `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede`). Pré-testes feitos em 05/11: senha do Config.h conferida pelo dono no iPhone (relato do dono; na CAM, não verificado); servidor em *:8080 respondeu ao iPhone na MARCILIO&PATY (verificado em hardware); Mac em 192.168.1.170 com endereço Wi-Fi privado Fixo (verificado em host); firewall do macOS libera o Python (verificado em host). Sem acesso ao roteador TIM (senha da etiqueta não funcionou): sem reserva de DHCP; se o IP do Mac mudar, regravar SERVER_URL por OTA.
+B) [CONCLUÍDO em 06/11/2026: CAM em 192.168.1.162 e servidor em 192.168.1.50] Trocar a CAM para o roteador novo (MARCILIO&PATY, 2,4 GHz canal 10, WPA/WPA2) por OTA. Estado: Config.h local da CAM já editado pelo dono (WIFI_SSID, WIFI_PASSWORD, SERVER_URL http://192.168.1.170:8080); cópia do Config.h antigo em ~/Desktop/Sistemas embarcados/Config-cam-rede-mac.h (fora do repo); firmware compilado em /tmp/camb às 09:48 de 05/11 (imagem Esp32CamRede.ino.bin de 1115376 B, por ls; se /tmp/camb sumir, recompilar da raiz do repositório com `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede`). Pré-testes feitos em 05/11: senha do Config.h conferida pelo dono no iPhone (relato do dono; na CAM, não verificado); servidor em *:8080 respondeu ao iPhone na MARCILIO&PATY (verificado em hardware); Mac em 192.168.1.170 com endereço Wi-Fi privado Fixo (verificado em host); firewall do macOS libera o Python (verificado em host). Sem acesso ao roteador TIM (superado em 06/11/2026: acesso obtido; o roteador não tem reserva de DHCP) (senha da etiqueta não funcionou): sem reserva de DHCP; se o IP do Mac mudar, regravar SERVER_URL por OTA.
    Passos: (1) parar o servidor (Ctrl+C); (2) iPhone no cabo USB; Compartilhamento de Internet de "iPhone USB" para só Wi-Fi, canal 1/6/11; (3) ligar a CAM (IO0 solto); conferir no Mac `ifconfig bridge100 | grep "inet "` = 192.168.2.1 e `ping 192.168.2.2`; (4) enviar por OTA para 192.168.2.2: no Terminal do dono, numa linha: `cd ~/Desktop/"Sistemas embarcados"/controle-acesso-esp32 && read -s "OTA?Senha OTA: " && echo && "/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" upload --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --port 192.168.2.2 --protocol network --upload-field password="$OTA" --input-dir /tmp/camb firmware/Esp32CamRede; unset OTA` (a senha OTA é digitada escondida, nunca no chat); (5) desligar o Compartilhamento, reconectar o Mac na MARCILIO&PATY, rodar o atalho do servidor; (6) achar a CAM na rede nova (`dns-sd -B _arduino._tcp`, "controle-cam") (encerrar com Ctrl+C) e conferir painel "ESP32 conectado" e devices.clock_synced=1; (7) apagar /tmp/camb. Plano B: se o envio falhar, a CAM continua com o firmware antigo na rede do Mac; repetir. Se o envio concluir mas a CAM não aparecer na MARCILIO&PATY em 2 minutos: regravar pela ponte do Mega 2 (seção 6); para insistir na rede nova, corrigir WIFI_SSID/WIFI_PASSWORD no Config.h atual; para voltar à rede do Mac, copiar ~/Desktop/Sistemas embarcados/Config-cam-rede-mac.h por cima de firmware/Esp32CamRede/Config.h (o dono faz) e recompilar.
 
 Próximo passo exato (04/11/2026), em ordem:
 0) Antes de qualquer passo: `LOCK_MODE=0` no Config.h local do Mega, fechadura desconectada; USB e chave da YwRobot desligadas ao mexer na fiação.
 1) Trocar ADMIN_PIN (Config.h do Mega 1) e DEVICE_KEY (Config.h da CAM e comando do servidor). A CAM poderá ser regravada por OTA depois do primeiro teste (passo 3); até lá, o caminho garantido é a ponte serial do Mega 2 (seção 6). Pendente (seção 7, item b). Valores nunca no chat.
 2) Conferir as 16 teclas do teclado após a remontagem (espelho serial, porta fechada, verdes D30/D31 ao GND). Não verificado.
-3) (Substituído pelo passo B de 05/11 acima.) Testar a OTA de verdade (executável sem esta conversa; pré-requisito: `OTA_PASSWORD` definido no Config.h local da CAM):
+3) (Substituído pelo passo B de 05/11 acima; OTA feita em 06/11/2026, seção 4, sessão 8.) Testar a OTA de verdade (executável sem esta conversa; pré-requisito: `OTA_PASSWORD` definido no Config.h local da CAM):
    a) Compilar com o Config.h local (a /tmp/camb foi apagada; recompilar): `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede`.
    b) Enviar pela rede: na Arduino IDE, escolher a porta de rede "controle-cam"; ou `arduino-cli upload --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --port 192.168.2.2 --protocol network --upload-field password=<senha OTA do Config.h> --input-dir /tmp/camb firmware/Esp32CamRede`. A senha é digitada só no Terminal, nunca no chat.
    c) Sucesso = envio concluído; a CAM reinicia e volta a responder ping em 192.168.2.2; painel "ESP32 conectado" e relógio sincronizado (`devices.clock_synced=1`).
