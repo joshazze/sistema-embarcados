@@ -130,6 +130,26 @@ Níveis de evidência:
 | CAM na rede da casa e heartbeat do servidor | 06/11/2026 | `dns-sd -G v4 controle-cam.local`; servidor (atalho rodar-servidor-controle.command, 0.0.0.0:8080) | CAM em 192.168.1.162. Device porta01 com seen_at 15:48:00 e 15:48:10; clock_synced=1; queued=0; dropped=0; rejected=0; heartbeat a cada ~10 s; o dono confirmou no painel 'ESP32 conectado' (verificado em hardware) | verificado em hardware |
 | Ping Mac -> CAM após a OTA | 06/11/2026 | ping na rede da casa | 3,2 a 4,0 s (antes da OTA, na rede de testes: 20 ms a 2,7 s, com perdas). Suspeita: alimentação da CAM no limite | verificado em host (medição); causa: inferência |
 | Reconexão automática após queda do modem | 06/11/2026 | Leitura do código: WiFi.setAutoReconnect(true) e WiFi.reconnect() a cada 15 s em networkTask() | Não testada; teste de reinício do modem pendente | análise de código; não verificado em hardware |
+| Teclado 4x4 antigo (sessão 9) | 06/11/2026 | Uso na bancada | Quebrou internamente; substituído por teclado de membrana de 8 pinos | relato do dono |
+| Teclado novo de membrana: mapeamento | 06/11/2026 | Sketch de varredura no Uno (fora do repositório) | 16/16 teclas; pinos 1 a 4 = R1 a R4, 5 a 8 = C1 a C4 (ordem inversa do antigo) | verificado em hardware |
+| Teclado novo no Mega | 06/11/2026 | Pino N do teclado no D(21+N) (1 -> D22 ... 8 -> D29); firmware sem mudança de pinos | 16 teclas no Mega não reconferidas formalmente | não verificado |
+| Teclado Dell SK-8175 como PS/2 | 06/11/2026 | Leitura PS/2 nos fios do cabo cortado | Só "linhas CLK=1 DATA=1", sem scan codes: não fala PS/2. USB (Mega não é host USB) e Bluetooth descartados por análise; matriz da membrana (dois grupos, ~26 a 30 linhas) não usada | verificado em hardware (PS/2); demais: análise de código/inferência |
+| RC522 no Uno | 06/11/2026 | MFRC522 1.4.12; falha inicial por pinos sem solda, resolvida soldando | VersionReg 0x82 (clone); cartão MIFARE 1KB com UID de 4 bytes lido | verificado em hardware |
+| RC522 no Mega: ligação | 06/11/2026 | SDA/SS D53, SCK D52, MOSI D51, MISO D50, RST D49, 3.3V do Mega; direto, sem divisores (decisão do dono; risco aceito: fora da especificação do chip) | Leitura de cartão no Mega não ensaiada | não verificado |
+| Firmware RC522, login por ID + senha e bloqueio do teclado | 06/11/2026 | Commit `160534d`; revisão Sonnet do login (2 rodadas) | CardStore.h (EEPROM 3148..4047, slots de 9 bytes, CRC-8 com id); método `card`, eventos `card_linked` e `keypad_locked`, motivo `unknown_card`; bloqueio de 60 s na 5a falha seguida | análise de código |
+| Acesso por ID + senha no Mega | 06/11/2026 | Ensaio do dono | "Acesso liberado" e fechadura abrindo | relato do dono |
+| Suíte de testes após `9d3bed2` | 06/11/2026 | Suíte Python do repositório | 206 testes, 1 falha pré-existente em `test_server.test_deeply_nested_json_reports_400` | verificado em host |
+| OTA da CAM com a rota `/mega` | 06/11/2026 | espota.py, 3 tentativas | 1a: timeout em 2%; 2a: broken pipe em 14%; 3a: sucesso às ~19:27, com o Wi-Fi estável logo após reinício | verificado em hardware |
+| Rota `/mega` (porta 8081) | 06/11/2026 | Requisição sem credenciais à CAM em 192.168.1.162 | HTTP 401 | verificado em host |
+| Divisor D1 -> IO15 (RX da UART1 da CAM) | 06/11/2026 | Medição de tensão | 3,3 V | verificado em hardware |
+| Reset do Mega pelo BC337 (IO12 -> 1 kΩ -> base; 10 kΩ IO12-GND) | 06/11/2026 | Fio da base do circuito no 3.3V | Mega reiniciou | relato do dono |
+| Gravação do Mega pela CAM, 1a tentativa | 06/11/2026 | `scripts/gravar-mega-pela-cam.py --compilar --host 192.168.1.162` | Resposta perdida (Connection reset); Mega voltou com o firmware antigo intacto | verificado em hardware (falha) |
+| Gravação do Mega pela CAM, 2a tentativa (após reiniciar a CAM) | 06/11/2026 | Mesmo comando | HTTP 200 ok, 43688 bytes, 11296 ms, 1 tentativa. Primeira gravação do Mega pela CAM. LCD com o texto novo (relato do dono) | verificado em hardware |
+| LOCK_MODE gravado no Mega | 06/11/2026 | O dono editou o Config.h (não aberto pelo agente) | LOCK_MODE=1, confirmado pelo comportamento da fechadura | relato do dono |
+| Wi-Fi da CAM instável | 06/11/2026 (noite) | Ping Mac -> CAM e Mac -> roteador; heartbeats no servidor; teste retirando os fios novos | Ping 1 a 6 s, perdas, heartbeats espaçados; melhora após reinício; sem os fios novos também oscila; Mac -> roteador 3,7 ms; roteador no canal 2. Causa provável: alimentação ou antena | verificado em host (ping); verificado em hardware (teste sem os fios); causa: inferência |
+| Bancada do amigo do dono (05 e 06/11) | 06/11/2026 | Handoff do amigo (zip `handoff-bancada-2026-11-06`, não versionado) | Fonte 12 V -> LM2596 7,0 V (medido pelo amigo) -> MB102; Mega pelo VIN; relé GBK P5 ativo em HIGH com 10 kΩ D35-GND; 1N4007 da fechadura não instalado; LED RGB 5 mm com 330 Ω por canal (tipo comum a confirmar); buzzer com polaridade invertida (correção não verificada) | relato do dono (handoff do amigo) |
+| Fechadura com LOCK_MODE=1 | 06/11/2026 | Acesso autorizado | Abriu; o Mega reinicia quando a fechadura solta. Causa provável: falta do 1N4007 (pico da bobina no GND/12 V que também alimenta o Mega) | relato do dono; causa: inferência |
+| Piscada do LED em 10 s e textos novos do LCD | 06/11/2026 | Mudança em andamento por outro agente, não commitada | Não gravado nem ensaiado | não verificado |
 
 Textos do LCD alterados (MEGA-07). Antigo -> novo, conforme `firmware/MegaControlador/MegaControlador.ino`:
 
@@ -181,13 +201,14 @@ CLI não executa. Para compilar, usou-se um ctags ARM64 indicado pela propriedad
 ## Limites
 
 - Atualização 03/11/2026 (tarde): gravação e boot da CAM, Wi-Fi e conexão contínua com o servidor na rede de teste verificados em hardware. Não verificados: fluxo de foto CAM -> servidor, UART com o Mega de uso, NTP (sem internet IPv4 na rede do Mac) e fechadura. Os itens abaixo são do registro anterior.
+- Atualização 06/11/2026 (sessão 9): RC522 e teclado novo verificados no Uno; primeira gravação do Mega pela CAM verificada em hardware. Não verificados: 16 teclas e cartão no Mega, cor do LED, fechadura sem reinício do Mega.
 - Além do passo 3 da bancada, da matriz do teclado, da leitura do teclado pelo Mega, do circuito do buzzer, do DY50 comunicando, do cadastro, dos acessos pela digital e pela senha e do buzzer pelo firmware, porta forçada e porta aberta por tempo (por relato do dono) (02/11/2026, ver Registros), nenhum teste físico, gravação da CAM, LCD, UART Mega-CAM, câmera, Wi-Fi/NTP real ou fechadura foi feito.
 - Buzzer: o acionamento pelo firmware foi verificado em 02/11/2026 (EntryExpired, 3 bipes, ouvido pelo dono). OpenTooLong foi exercitado em 02/11/2026 por relato do dono (bipe a cada 2 s; sem STATUS registrado; ver Registros).
 - Espelho do LCD na serial: sai sem AUTH e mostra os mesmos textos do LCD (por exemplo "Acesso liberado | ID n"); as linhas `LCD|` podem se intercalar com respostas de comando (revisão de 02/11/2026).
 - LED RGB: não ligado (módulo ausente em 02/11/2026). DY50: resolvido no fim de 02/11/2026 (sessão 4, continuação): energizado pela MB102 e comunicando (`dy50=ok`), ver Registros.
 - A suíte usa dublês para DY50, EEPROM, relógio, entropia e rede. Ela não comprova
   temporização, níveis de UART, I²C, câmera ou comportamento físico.
-- `LOCK_MODE=0` permanece. O acionamento da fechadura não foi testado.
+- `LOCK_MODE=0` permanece. O acionamento da fechadura não foi testado. (Superado em 06/11/2026, sessão 9: Mega gravado com LOCK_MODE=1; fechadura abriu, mas o Mega reinicia quando ela solta; relato do dono, ver Registros.)
 - Os números do Mega são de 30/10/2026. A linha da sessão 2 é a medição atual.
   Eles não substituem a validação física. Os valores globais não medem pico de
   pilha/heap.

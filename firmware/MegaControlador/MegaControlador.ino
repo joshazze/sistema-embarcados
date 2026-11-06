@@ -541,7 +541,7 @@ void outputsTick() {
   else if (ui != Ui::Access) rgb(true, false, true);
   else if (door.state == DoorState::Open) { bool on = (now / 600) % 2; rgb(on, on, false); }
   else if (door.state == DoorState::AwaitOpen) rgb(false, true, false);
-  else rgb(false, false, now % 60000 < 200);
+  else rgb(false, false, now % 10000 < 200);  // repouso: piscada azul de 200 ms a cada 10 s
 }
 void doorTick() {
   const uint32_t now = millis();
@@ -601,7 +601,7 @@ void displayTick() {
       case Ui::LinkId: a = "Vincular ID:"; b = entry; break;
       case Ui::CardEnroll: a = "Aproxime cartao"; b = "# pula"; break;
       case Ui::CardLink: a = "Aproxime cartao"; b = idText(pendingId) + " * cancela"; break;
-      case Ui::AccessPin: a = String("Senha ") + idText(pendingId); break;
+      case Ui::AccessPin: a = "#confirma *limpa"; b = idText(pendingId) + ": "; break;
       case Ui::ConfirmStatus: a = idText(pendingId) + (enableRequested ? " Reativar?" : " Inativar?"); b = "# Sim D Cancelar"; break;
       default: break;
     }
@@ -612,18 +612,21 @@ void displayTick() {
     // B6: ID de até 3 dígitos aparece (não é segredo); entrada maior pode ser o admin, então mascara.
     // Prefixo de 1 a 3 dígitos do ADMIN_PIN também vira '*' (LCD e espelho; masked fica falso para o
     // espelho de bancada com SHOW_TYPED_DIGITS não mostrar esse prefixo).
-    a = !storageReady ? "Falha memoria" : "ID + # ou cartao";
+    // Repouso: "Controle acesso" / "ID cartao dedo"; ao digitar, a linha 1 vira a ajuda das teclas.
+    if (entry.length()) a = "#confirma *limpa";
+    else a = !storageReady ? "Falha memoria" : "Controle acesso";
     if (entry.length() > 3 || adminPrefix(entry)) {
       for (size_t i = 0; i < entry.length(); ++i) b += '*';
       masked = entry.length() > 3;
     }
     else if (entry.length()) b = entry;
-    else b = fingerprintReady ? "ou digital" : "Digital indispon";
+    else b = fingerprintReady ? "ID cartao dedo" : "ID ou cartao";
   }
 #if LCD_SERIAL_MIRROR
   // Espelho na serial USB: o mesmo texto do LCD, inclusive quando o LCD está ausente.
 #if SHOW_TYPED_DIGITS
-  const String mb = masked ? entry : b;
+  // Troca só os '*' finais pelos dígitos (mantém o prefixo "ID 00X: " da tela de senha).
+  const String mb = masked ? b.substring(0, b.length() - entry.length()) + entry : b;
 #else
   const String mb = b; (void)masked;
 #endif

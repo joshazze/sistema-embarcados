@@ -199,8 +199,16 @@ MAIN_LED = r'''
 int main() {
  fecha(true);  // porta começa fechada (botões em LOW)
  rawClosed = stableClosed = true; rawSince = 0; door.begin(true, 0); resetUi(); noticeDuration = 0;
- // Ocioso: azul por 200 ms a cada minuto, apagado no resto
- passo(30000); assert(cor() == "000");
+ // Ocioso: azul por 200 ms a cada 10 s, apagado no resto
+ passo(35000); assert(cor() == "000");
+ // Repouso: "001" quando t % 10000 < 200 e "000" fora da janela, em vários ciclos
+ for (uint32_t k = 4; k <= 5; ++k) {
+  passo(k * 10000);       assert(cor() == "001");
+  passo(k * 10000 + 199); assert(cor() == "001");
+  passo(k * 10000 + 200); assert(cor() == "000");
+  passo(k * 10000 + 5000); assert(cor() == "000");
+  passo(k * 10000 + 9999); assert(cor() == "000");
+ }
  passo(60100); assert(cor() == "001");
  passo(60200); assert(cor() == "000");
  // Autorizado, aguardando abertura: verde
@@ -401,14 +409,16 @@ int main() {
  notice("Cadastrado", idText(7)); tela("Cadastrado", "ID 007");
  noticeDuration = 0;
  // (f) ocioso: ID de até 3 dígitos aparece; entrada maior (pode ser o admin) mascara; DY50 e memória
- entry = "12"; tela("ID + # ou cartao", "12");
- entry = "1234"; tela("ID + # ou cartao", "****");
- entry = ""; tela("ID + # ou cartao", "ou digital");
- fingerprintReady = false; tela("ID + # ou cartao", "Digital indispon"); fingerprintReady = true;
- storageReady = false; tela("Falha memoria", "ou digital"); storageReady = true;
+ entry = "12"; tela("#confirma *limpa", "12");
+ entry = "1234"; tela("#confirma *limpa", "****");
+ entry = ""; tela("Controle acesso", "ID cartao dedo");
+ fingerprintReady = false; tela("Controle acesso", "ID ou cartao"); fingerprintReady = true;
+ storageReady = false; tela("Falha memoria", "ID cartao dedo");
+ entry = "1"; tela("#confirma *limpa", "1"); entry = ""; storageReady = true;
  // (f2) tela de senha do ID (B1): mascara com '*'; '*' vazio volta ao ID (teste de texto só)
- ui = Ui::AccessPin; pendingId = 1; entry = "12"; tela("Senha ID 001", "**");
- entry = ""; tela("Senha ID 001", "");
+ ui = Ui::AccessPin; pendingId = 1; entry = "12"; tela("#confirma *limpa", "ID 001: **");
+ entry = "123456"; tela("#confirma *limpa", "ID 001: ******");
+ entry = ""; tela("#confirma *limpa", "ID 001: ");
  // (f3) teclado travado (B4): texto de contagem em 16 colunas
  resetUi(); keypadLockActive = true; keypadLockedAt = now; tela("Teclado travado", "Aguarde 60 s");
  keypadLockActive = false; pinFailures = 0;
