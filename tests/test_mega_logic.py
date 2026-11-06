@@ -17,6 +17,7 @@ PREFIX = r'''
 #include "UserStore.h"
 #include "DoorLogic.h"
 #include "BuzzerLogic.h"
+#include "CardStore.h"
 class String : public std::string {
  public: using std::string::string; using std::string::operator=;
  String(const std::string &s):std::string(s) {}
@@ -70,7 +71,7 @@ int main() {
  assert(!strcmp(resetPassword(1,"222222","usb",0),"ok"));
  assert(!strcmp(resetPassword(1,"111111","web",0x1234),"ok"));
  assert(matches(1,"222222") && !matches(1,"111111"));
- assert(changeStatus(1,false)); assert(!activeUser(1)); assert(ownerOfPin("222222")==1);
+ assert(changeStatus(1,false)); assert(!activeUser(1)); assert(matches(1,"222222"));
  assert(changeStatus(1,true)); assert(activeUser(1));
  ui=Ui::ConfirmPin; pendingId=2; firstPin="444444"; entry="444444"; finger.openOnStore=true;
  confirmEnrollment(); assert(!exists(2) && finger.deleted==2 && ui==Ui::Access);
@@ -99,8 +100,7 @@ int main() {
  ui=Ui::ConfirmStatus; pendingId=1; enableRequested=false; noticeDuration=0; ticksUntilOpen=2;
  handleKey('#'); assert(!activeUser(1) && door.state==DoorState::Alarm && noticeDuration==0);
  door.begin(true,now); assert(changeStatus(1,true));
- ticksUntilOpen=2; // abre enquanto o primeiro hash está sendo calculado
- assert(!strcmp(resetPassword(1,"333333","usb",0),"device_busy"));
+ // B5: sem varredura de senhas, a porta não interrompe mais o reset no meio de um hash (não há busca).
  door.begin(true,now); assert(matches(1,"222222"));
  UserRecord existing; assert(readRecord(1,existing)); ticksUntilOpen=2;
  assert(saveRecord(1,existing)); assert(door.state==DoorState::Alarm && matches(1,"222222"));
@@ -249,15 +249,16 @@ int main() {
  assert(noticeLine1=="Cadastro falhou" && noticeLine2=="Erro na memoria" && noticeError);
  assert(ui==Ui::Access && entry=="" && finger.deleted==0);
  assert(audits.size()==1 && audits[0]=="enroll_failed|0|admin|Erro na memoria");
- // Teclado com falha de armazenamento: aviso explícito e senha limpa.
- ui=Ui::Access; entry="123456"; noticeDuration=0; audits.clear();
- handleKey('#');
- assert(noticeLine1=="Falha memoria" && noticeLine2=="Acesso negado" && entry=="");
+ // Teclado com falha de armazenamento: ID 1 pede a senha; a falha aparece só na comparação.
+ ui=Ui::Access; entry="1"; noticeDuration=0; audits.clear();
+ handleKey('#'); assert(ui==Ui::AccessPin && pendingId==1);
+ entry="123456"; handleKey('#');
+ assert(noticeLine1=="Falha memoria" && noticeLine2=="Acesso negado" && entry=="" && ui==Ui::Access);
  assert(audits.size()==1 && audits[0]=="access_denied|0|password|Erro na memoria");
- // Teclado com armazenamento ok e senha errada: continua como senha incorreta.
- storageReady=true; ui=Ui::Access; entry="999999"; noticeDuration=0; audits.clear();
- handleKey('#');
- assert(noticeLine2=="Senha incorreta" && audits.size()==1 && audits[0]=="access_denied|0|password|invalid_pin");
+ // Armazenamento ok e senha errada: "Senha incorreta" e auditoria com o ID tentado.
+ storageReady=true; ui=Ui::Access; entry="1"; noticeDuration=0; audits.clear();
+ handleKey('#'); entry="999999"; handleKey('#');
+ assert(noticeLine2=="Senha incorreta" && audits.size()==1 && audits[0]=="access_denied|1|password|invalid_pin");
 }
 '''
         with tempfile.TemporaryDirectory() as directory:

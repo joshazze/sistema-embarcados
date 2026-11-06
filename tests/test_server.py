@@ -199,6 +199,53 @@ class ServerTests(unittest.TestCase):
         for changes in [dict(type=[]), dict(user_id=101), dict(epoch=True), dict(active="true"), dict(device="outra")]:
             self.assertEqual(self.request("/api/device/events", self.event(**changes), "device")[0], 400)
 
+    def test_card_events_are_accepted_and_stored(self):
+        granted = self.event(event_id="card-ok", type="access_granted", method="card", reason="ok", user_id=2, active=True, epoch=1700000200)
+        denied = self.event(event_id="card-no", type="access_denied", method="card", reason="unknown_card", user_id=0, active=False, epoch=1700000201)
+        self.assertEqual(self.request("/api/device/events", granted, "device")[0], 200)
+        self.assertEqual(self.request("/api/device/events", denied, "device")[0], 200)
+        events = {e["event_id"]: e for e in self.request("/api/admin/overview")[1]["events"]}
+        self.assertEqual(events["card-ok"]["method"], "card")
+        self.assertEqual(events["card-no"]["reason"], "unknown_card")
+        self.assertEqual(events["card-no"]["type"], "access_denied")
+        # Reconhecido pelo método: foto de acesso autorizado por cartão é aceita.
+        self.assertEqual(self.photo("card-ok")[0], 200)
+
+    def test_card_linked_references_user_without_changing_active(self):
+        self.request("/api/device/events", self.event(event_id="enroll-x", type="user_enrolled", user_id=3, active=False), "device")
+        linked = self.event(event_id="link-x", type="card_linked", method="admin", user_id=3, active=True, reason="ok")
+        self.assertEqual(self.request("/api/device/events", linked, "device")[0], 200)
+        overview = self.request("/api/admin/overview")[1]
+        self.assertEqual([e["type"] for e in overview["events"] if e["event_id"] == "link-x"], ["card_linked"])
+        self.assertEqual([(u["user_id"], u["active"]) for u in overview["users"]], [(3, 0)])
+
+    def test_card_linked_creates_user_row_only_when_missing(self):
+        self.assertEqual(self.request("/api/device/events", self.event(event_id="link-new", type="card_linked", method="card", user_id=4, active=True, reason="ok"), "device")[0], 200)
+        self.assertEqual([(u["user_id"], u["active"]) for u in self.request("/api/admin/overview")[1]["users"]], [(4, 1)])
+
+    def test_card_linked_requires_user_id_and_card_values_stay_validated(self):
+        self.assertEqual(self.request("/api/device/events", self.event(event_id="link-0", type="card_linked", method="card", user_id=0), "device")[0], 400)
+        for changes in [dict(method="rfid"), dict(method=None), dict(type="card_read")]:
+            self.assertEqual(self.request("/api/device/events", self.event(event_id="bad-card", **{"type": "access_granted", **changes}), "device")[0], 400)
+
+    def test_keypad_locked_aceito_sem_usuario(self):
+        locked = self.event(event_id="lock-1", type="keypad_locked", method="keypad", user_id=0, active=False, reason="invalid_pin")
+        self.assertEqual(self.request("/api/device/events", locked, "device")[0], 200)
+        self.assertIn("keypad_locked", [e["type"] for e in self.request("/api/admin/overview")[1]["events"]])
+
+    def test_reset_nao_recusa_senha_repetida_entre_ids(self):
+        # Senhas podem repetir entre IDs: a unicidade não é checada no servidor (o Mega decide).
+        for user_id in (1, 2):
+            self.request("/api/device/events", self.event(event_id=f"enroll-r{user_id}", type="user_enrolled", user_id=user_id, active=True), "device")
+        self.assertEqual(self.reset(user_id=2, pin="654321", confirmation="654321")[0], 202)
+
+    def test_panel_has_labels_for_card_events(self):
+        script = (ROOT / "servidor/static/app.js").read_text(encoding="utf-8")
+        self.assertIn("card:'Cartão RFID'", script)
+        self.assertIn("card_linked:'Cartão vinculado'", script)
+        self.assertIn("unknown_card:'Cartão desconhecido'", script)
+        self.assertIn("keypad_locked:'Teclado bloqueado'", script)
+
     def test_no_password_exposed_in_overview(self):
         self.enroll()
         self.reset()

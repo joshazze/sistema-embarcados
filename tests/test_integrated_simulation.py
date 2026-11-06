@@ -21,6 +21,7 @@ PREFIX = r'''
 #include <vector>
 #include "UserStore.h"
 #include "BootCounter.h"
+#include "CardStore.h"
 #include "DoorLogic.h"
 #include "BuzzerLogic.h"
 #include "SerialFrame.h"
@@ -47,6 +48,7 @@ struct SHA256 { uint32_t v=2166136261u; void reset() { v=2166136261u; }
 };
 struct UserRecord { uint8_t active,salt[4],hash[16]; uint64_t lastWebToken; };
 constexpr uint8_t MAX_USERS=100; bool storageReady=true,fingerprintReady=true;
+const char ADMIN_PIN[]="0000000000";
 uint16_t lastId=0; uint32_t bootNumber=1,eventSequence=0,droppedEvents=0;
 DoorLogic door; BuzzerLogic buzzer; Port Serial2;
 void doorTick() {} void outputsTick() {}

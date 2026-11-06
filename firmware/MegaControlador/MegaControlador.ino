@@ -4,6 +4,8 @@
 #include <SHA256.h>
 #include <Adafruit_Fingerprint.h>
 #include <Keypad.h>
+#include <SPI.h>
+#include <MFRC522.h>
 #include "Config.h"
 #include <LiquidCrystal.h>
 #ifndef LCD_PIN_RS
@@ -24,6 +26,13 @@
 #ifndef LCD_PIN_D7
 #define LCD_PIN_D7 42
 #endif
+// RC522 (SPI): no Mega, SS=D53 e RST=D49 (SPI em D50-D52). Config.h pode trocar com #define.
+#ifndef RFID_SS_PIN
+#define RFID_SS_PIN 53
+#endif
+#ifndef RFID_RST_PIN
+#define RFID_RST_PIN 49
+#endif
 // Espelho do LCD na serial USB (linhas "LCD| ..."); desligue com LCD_SERIAL_MIRROR 0 em Config.h.
 #ifndef LCD_SERIAL_MIRROR
 #define LCD_SERIAL_MIRROR 1
@@ -33,6 +42,7 @@
 #endif
 #include "UserStore.h"
 #include "BootCounter.h"
+#include "CardStore.h"
 #include "Dy50ResponseFilter.h"
 #include "SerialFrame.h"
 #include "MessageProtocol.h"
@@ -85,13 +95,15 @@ class ServicedFingerStream : public Stream {
 ServicedFingerStream fingerStream;
 Adafruit_Fingerprint finger(static_cast<Stream *>(&fingerStream));
 LiquidCrystal lcd(LCD_PIN_RS, LCD_PIN_E, LCD_PIN_D4, LCD_PIN_D5, LCD_PIN_D6, LCD_PIN_D7);
+MFRC522 rfid(RFID_SS_PIN, RFID_RST_PIN);
 char keys[4][4] = {{'1','2','3','A'}, {'4','5','6','B'}, {'7','8','9','C'}, {'*','0','#','D'}};
 byte rows[4], cols[4];
 Keypad keypad(makeKeymap(keys), rows, cols, 4, 4);
 DoorLogic door; BuzzerLogic buzzer;
 void queueEvent(const char *, uint16_t, const char *, const char *);
 enum class Ui { Access, Menu, FirstFinger, RemoveFinger, SecondFinger,
-                FirstPin, ConfirmPin, DisableId, EnableId, ConfirmStatus };
+                FirstPin, ConfirmPin, DisableId, EnableId, ConfirmStatus,
+                CardEnroll, LinkId, CardLink, AccessPin };
 Ui ui = Ui::Access;
 // B4: falhas seguidas de getImage durante o cadastro; só a 4a aborta (PACKETRECIEVEERR aborta já).
 uint8_t enrollReadFails = 0;
@@ -111,11 +123,38 @@ String serialLine;
 String lcdPrevA, lcdPrevB;
 String mirrorPrevA, mirrorPrevB;  // último par espelhado na serial (independe do LCD)
 uint32_t lastFingerRecovery = 0;
+// RC522: leitura a cada 100 ms com a porta em repouso; o mesmo UID é ignorado por 2 s.
+bool rfidReady = false;
+uint32_t lastRfidPoll = 0, lastRfidRecovery = 0, lastCardAt = 0;
+CardStore::Tag lastCard = {}, pendingCard = {};
+bool cardPending = false;
+// B4: 5 senhas erradas seguidas (ID ou admin com 10 digitos) travam o teclado por 60 s.
+// Senha certa não zera o contador; ele volta a zero após 10 min sem nenhuma falha. Só em RAM:
+// um reinício zera o contador e libera o teclado (aceito; não grava na EEPROM).
+constexpr uint8_t kPinFailLimit = 5;
+constexpr uint32_t kKeypadLockMs = 60000, kPinFailDecayMs = 600000;
+uint8_t pinFailures = 0;
+uint32_t lastPinFailureAt = 0;
+bool keypadLockActive = false;
+uint32_t keypadLockedAt = 0;
+// Tempo restante do bloqueio em ms (0 = livre). Uma única leitura de millis() por chamada,
+// para que a decisão e o número exibido no LCD usem o mesmo instante.
+uint32_t keypadLockRemainingMs() {
+  if (!keypadLockActive) return 0;
+  const uint32_t elapsed = uint32_t(millis() - keypadLockedAt);
+  if (elapsed < kKeypadLockMs) return kKeypadLockMs - elapsed;
+  keypadLockActive = false; pinFailures = 0; return 0;
+}
+bool keypadLocked() { return keypadLockRemainingMs() != 0; }
 
 bool validPin(const String &pin, size_t length) {
   if (pin.length() != length) return false;
   for (size_t i = 0; i < length; ++i) if (pin[i] < '0' || pin[i] > '9') return false;
   return true;
+}
+// Entrada de 1 a 3 digitos que é começo do ADMIN_PIN: não pode aparecer na tela de ID.
+bool adminPrefix(const String &typed) {
+  return typed.length() >= 1 && typed.length() <= 3 && !strncmp(typed.c_str(), ADMIN_PIN, typed.length());
 }
 // Arquivos são lidos sob demanda para caber na SRAM do Mega.
 bool readRecord(uint16_t id, UserRecord &record) {
@@ -141,21 +180,6 @@ bool matches(uint16_t id, const String &pin) {
       && memcmp(hash, record.hash, sizeof(hash)) == 0;
 }
 void linkTick(bool sensorWait);
-uint16_t ownerOfPin(const String &pin) {
-  for (uint16_t id = 1; id <= MAX_USERS; ++id) {
-    // A busca de 100 hashes leva tempo no AVR. Continuar a atender a porta
-    // entre registros; se ela abrir, abortar a operação em andamento.
-    doorTick(); outputsTick(); linkTick(true);
-    if (!storageReady) return MAX_USERS + 2;
-    if (door.state != DoorState::Idle || !door.closed) return MAX_USERS + 1;
-    bool match = matches(id, pin);
-    doorTick(); outputsTick(); linkTick(true);
-    if (!storageReady) return MAX_USERS + 2;
-    if (door.state != DoorState::Idle || !door.closed) return MAX_USERS + 1;
-    if (match) return id;
-  }
-  return 0;
-}
 // Cada escrita EEPROM pode levar milissegundos na placa real. Atender a porta
 // entre bytes sem interromper o journal, inclusive se a porta for aberta.
 struct ServicedEeprom {
@@ -182,6 +206,17 @@ void fillSalt(uint8_t *salt, uint16_t id) {
 void audit(const char *type, uint16_t id = 0, const char *method = "", const char *reason = "") {
   queueEvent(type, id, method, reason);
 }
+// Conta uma senha errada (ID ou admin) no mesmo contador. Após 10 min sem falha, recomeça em 1.
+// Retorna true quando a falha atinge o limite e o teclado é travado (com a auditoria keypad_locked).
+bool registerPinFailure() {
+  const uint32_t at = millis();
+  if (uint32_t(at - lastPinFailureAt) >= kPinFailDecayMs) pinFailures = 0;
+  lastPinFailureAt = at;
+  if (++pinFailures < kPinFailLimit) return false;
+  pinFailures = 0; keypadLockActive = true; keypadLockedAt = at;
+  audit("keypad_locked", 0, "keypad", "invalid_pin");
+  return true;
+}
 void notice(const String &a, const String &b, bool error = false, uint32_t duration = 2000) {
   noticeLine1 = a; noticeLine2 = b; noticeError = error;
   noticeSince = millis(); noticeDuration = duration;
@@ -190,7 +225,7 @@ bool noticeActive() { return uint32_t(millis() - noticeSince) < noticeDuration; 
 String idText(uint16_t id) { char b[12]; snprintf(b, sizeof(b), "ID %03u", id); return String(b); }
 void resetUi() {
   ui = Ui::Access; entry = ""; firstPin = ""; pendingId = 0; enrollReadFails = 0;
-  uiTouched = millis();
+  cardPending = false; uiTouched = millis();
 }
 // message é o código de auditoria (reasonNames, usado pela CAM e pelo servidor); lcdLine é só o texto do LCD, até 16 colunas.
 void failEnrollment(const char *message, const char *lcdLine) {
@@ -212,10 +247,7 @@ const char *resetPassword(uint16_t id, const String &pin, const char *source, ui
   if (token && current.lastWebToken == token) return "ok";
   if (ui != Ui::Access || door.state != DoorState::Idle || !door.closed) return "device_busy";
   if (!validPin(pin, 6)) return "invalid_pin";
-  uint16_t owner = ownerOfPin(pin);
-  if (owner == MAX_USERS + 2) return "storage_error";
-  if (owner > MAX_USERS) return "device_busy";
-  if (owner && owner != id) return "pin_in_use";
+  // B5: senhas podem repetir entre IDs; a nova senha não é comparada com as dos outros.
   UserRecord updated = current;
   if (token) updated.lastWebToken = token;
   fillSalt(updated.salt, id);
@@ -247,11 +279,26 @@ void authorize(uint16_t id, const char *method) {
   noticeDuration = 0;
 }
 
+// B2: a senha só é comparada com o registro do próprio ID. ID inexistente, fora de 1..100,
+// inativo com senha errada ou senha errada recebem a mesma resposta (não revela o cadastro).
+void checkPassword(uint16_t id, const String &pin) {
+  const bool known = id >= 1 && id <= MAX_USERS;
+  const bool ok = known && matches(id, pin);
+  if (!storageReady) {
+    notice("Falha memoria", "Acesso negado", true);
+    audit("access_denied", 0, "password", "Erro na memoria"); return;
+  }
+  if (ok) { authorize(id, "password"); return; }
+  audit("access_denied", known ? id : 0, "password", "invalid_pin");
+  if (!registerPinFailure()) { notice("Acesso negado", "Senha incorreta", true); return; }
+  // B4: 5a senha errada seguida: teclado travado por 60 s, sem aviso de senha errada.
+}
+
 void beginEnrollment() {
   if (!storageReady || !fingerprintReady) { notice("Indisponivel", "Veja digital/mem", true); return; }
   if (lastId >= MAX_USERS) { notice("Limite atingido", "100 IDs em uso", true); return; }
   pendingId = lastId + 1;
-  firstPin = ""; entry = ""; enrollReadFails = 0;
+  firstPin = ""; entry = ""; enrollReadFails = 0; cardPending = false;
   // Exigir área livre antes da primeira captura, inclusive se o dedo ficou no leitor.
   ui = Ui::RemoveFinger; enableRequested = false;
 }
@@ -260,14 +307,10 @@ void confirmEnrollment() {
     firstPin = ""; entry = ""; ui = Ui::FirstPin;
     notice("Senhas nao batem", "Digite novamente", true); return;
   }
-  uint16_t owner = ownerOfPin(entry);
-  // Erro de armazenamento encerra o cadastro com aviso. Abertura da porta (MAX_USERS+1) já é mostrada pelo ciclo da porta.
-  if (owner == MAX_USERS + 2) { failEnrollment("Erro na memoria", "Erro na memoria"); return; }
-  if (owner > MAX_USERS) return;
-  if (owner) {
-    firstPin = ""; entry = ""; ui = Ui::FirstPin;
-    notice("Senha ja usada", "Escolha outra", true); return;
-  }
+  // B5: senha repetida é aceita. Erro de armazenamento encerra o cadastro com aviso;
+  // porta aberta durante o cadastro aborta em silêncio (o ciclo da porta já mostra).
+  if (!storageReady) { failEnrollment("Erro na memoria", "Erro na memoria"); return; }
+  if (door.state != DoorState::Idle || !door.closed) return;
   UserRecord record = {}; record.active = 1;
   const uint16_t enrollmentId = pendingId;
   const uint32_t generation = doorGeneration;
@@ -286,7 +329,19 @@ void confirmEnrollment() {
   if (stored != FINGERPRINT_OK) {
     failEnrollment("Erro ao gravar DY", "Erro gravar DY"); return;
   }
+  // Cartão antes do registro: se gravar o cartão falhar, nenhum usuário fica pela metade.
+  ServicedEeprom storage;
+  if (cardPending) {
+    if (!CardStore::write(storage, enrollmentId, pendingCard)) {
+      if (finger.deleteModel(enrollmentId) == FINGERPRINT_PACKETRECIEVEERR) fingerprintReady = false;
+      failEnrollment("Erro na memoria", "Erro na memoria"); return;
+    }
+  } else {
+    // A1: cadastro sem cartão apaga o slot deixado por cadastro anterior interrompido (órfão).
+    CardStore::clear(storage, enrollmentId);
+  }
   if (!saveRecord(enrollmentId, record)) {
+    if (cardPending) CardStore::clear(storage, enrollmentId);
     if (finger.deleteModel(enrollmentId) == FINGERPRINT_PACKETRECIEVEERR) fingerprintReady = false;
     failEnrollment("Erro na memoria", "Erro na memoria"); return;
   }
@@ -296,21 +351,28 @@ void confirmEnrollment() {
   if (doorGeneration == generation && door.state == DoorState::Idle) notice("Cadastrado", idText(id));
 }
 void handleKey(char key) {
-  if (!key || noticeActive()) return;
-  uiTouched = millis();
+  // B4: enquanto o teclado está travado, todas as teclas são ignoradas (cartão e digital seguem).
+  if (!key || noticeActive() || keypadLocked()) return;
+  uiTouched = millis(); entryTouched = millis();
   if (key == 'D') {
     if (ui != Ui::Access) { resetUi(); notice("Cancelado", ""); }
     else if (door.state == DoorState::Idle) entry = "";
     // D cancela administração/cadastro. Não anuncia cancelamento de um acesso liberado.
     return;
   }
-  if (key == '*') { entry = ""; return; }
+  if (key == '*' && ui == Ui::CardLink) { resetUi(); notice("Cancelado", ""); return; }
+  if (key == '*') {
+    // B3: na senha, '*' com entrada vazia volta à tela de ID; com dígitos, só limpa.
+    if (ui == Ui::AccessPin && entry.length() == 0) { ui = Ui::Access; pendingId = 0; }
+    entry = ""; return;
+  }
   if (ui == Ui::Menu) {
     if (key == '1') beginEnrollment();
     if (key == '2' || key == '3') {
       enableRequested = key == '3'; ui = enableRequested ? Ui::EnableId : Ui::DisableId;
       entry = "";
     }
+    if (key == '4') { ui = Ui::LinkId; entry = ""; }
     return;
   }
   if (ui == Ui::ConfirmStatus) {
@@ -325,9 +387,14 @@ void handleKey(char key) {
     return;
   }
   if (ui == Ui::FirstFinger || ui == Ui::RemoveFinger || ui == Ui::SecondFinger) return;
+  if (ui == Ui::CardEnroll || ui == Ui::CardLink) {
+    // Cadastro: # pula o cartão e segue para a senha. Vincular: só D e * agem (acima).
+    if (key == '#' && ui == Ui::CardEnroll) { ui = Ui::FirstPin; entry = ""; uiTouched = millis(); }
+    return;
+  }
   if (key >= '0' && key <= '9') {
-    const size_t limit = ui == Ui::Access ? 10 : ((ui == Ui::DisableId || ui == Ui::EnableId) ? 3 : 6);
-    if (entry.length() < limit) { entry += key; if (ui == Ui::Access) entryTouched = millis(); }
+    const size_t limit = ui == Ui::Access ? 10 : ((ui == Ui::DisableId || ui == Ui::EnableId || ui == Ui::LinkId) ? 3 : 6);
+    if (entry.length() < limit) entry += key;
     return;
   }
   if (key != '#') return;
@@ -336,14 +403,20 @@ void handleKey(char key) {
       if (door.state == DoorState::Idle && door.closed) {
         ui = Ui::Menu; audit("admin_login", 0, "keypad");
       } else notice("Feche a porta", "Aguarde o ciclo", true);
-    } else if (validPin(entry, 6)) {
-      uint16_t id = ownerOfPin(entry);
-      if (id == MAX_USERS + 2) { entry = ""; notice("Falha memoria", "Acesso negado", true); audit("access_denied", 0, "password", "Erro na memoria"); return; }
-      if (id > MAX_USERS) { entry = ""; return; }
-      if (id) authorize(id, "password");
-      else { notice("Acesso negado", "Senha incorreta", true); audit("access_denied", 0, "password", "invalid_pin"); }
-    } else { notice("Entrada invalida", "6 ou 10 digitos", true); }
+    } else if (entry.length() == 10) {
+      // 10 digitos que não são o admin: falha de senha (mesmo contador), aviso de entrada inválida.
+      audit("access_denied", 0, "keypad", "invalid_pin");
+      if (!registerPinFailure()) notice("Entrada invalida", "ID e # ou admin", true);
+    } else if (entry.length() >= 1 && entry.length() <= 3) {
+      // B1: ID de 1 a 3 dígitos pede a senha (sempre, mesmo se o ID não existir).
+      pendingId = uint16_t(entry.toInt()); ui = Ui::AccessPin;
+    } else { notice("Entrada invalida", "ID e # ou admin", true); }
     entry = "";
+  } else if (ui == Ui::AccessPin) {
+    if (!validPin(entry, 6)) { entry = ""; notice("Entrada invalida", "Use 6 digitos", true); return; }
+    const uint16_t id = pendingId; const String pin = entry;
+    entry = ""; ui = Ui::Access; pendingId = 0;
+    checkPassword(id, pin);
   } else if (ui == Ui::FirstPin || ui == Ui::ConfirmPin) {
     if (!validPin(entry, 6)) { entry = ""; notice("Senha invalida", "Use 6 digitos", true); return; }
     if (ui == Ui::FirstPin) { firstPin = entry; entry = ""; ui = Ui::ConfirmPin; }
@@ -352,17 +425,27 @@ void handleKey(char key) {
     pendingId = entry.toInt(); entry = "";
     if (!exists(pendingId)) { notice("ID inexistente", "Digite novamente", true); return; }
     ui = Ui::ConfirmStatus;
+  } else if (ui == Ui::LinkId) {
+    // Vincular cartão: o ID pode estar ativo ou inativo.
+    pendingId = entry.toInt(); entry = "";
+    if (!exists(pendingId)) { notice("ID inexistente", "Digite novamente", true); return; }
+    ui = Ui::CardLink; uiTouched = millis();
   }
 }
 // Senha parcial no teclado expira após 30 s sem tecla; sem aviso nem evento.
+// Vale para a tela de ID e a de senha: sem tecla por 30 s volta ao repouso e limpa tudo.
 void expireEntry() {
-  if (ui == Ui::Access && entry.length() && uint32_t(millis() - entryTouched) >= 30000) entry = "";
+  if (ui != Ui::Access && ui != Ui::AccessPin) return;
+  if (uint32_t(millis() - entryTouched) < 30000) return;
+  if (ui == Ui::AccessPin) resetUi();
+  else if (entry.length()) entry = "";
 }
 void fingerprintTick() {
   if (!fingerprintReady || uint32_t(millis() - lastFingerPoll) < 150 || noticeActive()) return;
   lastFingerPoll = millis();
   if (ui == Ui::Menu || ui == Ui::FirstPin || ui == Ui::ConfirmPin ||
-      ui == Ui::DisableId || ui == Ui::EnableId || ui == Ui::ConfirmStatus) return;
+      ui == Ui::DisableId || ui == Ui::EnableId || ui == Ui::ConfirmStatus ||
+      ui == Ui::LinkId || ui == Ui::CardEnroll || ui == Ui::CardLink || ui == Ui::AccessPin) return;
   if (door.state != DoorState::Idle || !door.closed) return;
   const Ui startedUi = ui;
   const uint32_t generation = doorGeneration;
@@ -422,7 +505,7 @@ void fingerprintTick() {
     if (p == FINGERPRINT_PACKETRECIEVEERR) fingerprintReady = false;
     if (ui != startedUi || doorGeneration != generation || door.state != DoorState::Idle || !door.closed) { waitFingerRemoval = true; return; }
     if (p != FINGERPRINT_OK) { failEnrollment("Digitais diferem", "Digitais diferem"); return; }
-    ui = Ui::FirstPin; entry = ""; uiTouched = millis();
+    ui = Ui::CardEnroll; entry = ""; cardPending = false; uiTouched = millis();
   } else {
     waitFingerRemoval = true;
     p = finger.fingerFastSearch();
@@ -492,11 +575,22 @@ void displayTick() {
   lastLcd = millis();
   String a, b;
   bool masked = false;
+  uint32_t lockLeft = 0;
   if (door.state == DoorState::Alarm) { a = "Feche a porta"; b = door.user ? idText(door.user) : "Sem autorizacao"; }
   else if (noticeActive()) { a = noticeLine1; b = noticeLine2; }
+  else if ((lockLeft = keypadLockRemainingMs()) != 0) {
+    // B4: 17 colunas não cabem; "Teclado travado" usa 15 e mostra a contagem (arredondada para cima, no máximo 60).
+    char restText[16];
+    snprintf(restText, sizeof restText, "Aguarde %lu s", (unsigned long)((lockLeft + 999) / 1000));
+    a = "Teclado travado"; b = restText;
+  }
   else if (ui != Ui::Access) {
     switch (ui) {
-      case Ui::Menu: a = "1 Novo 2 Inativ."; b = "3 Reativ. D Sair"; break;
+      case Ui::Menu:
+        // Duas telas alternadas: a opção 4 não cabe em 16 colunas junto das outras.
+        if ((millis() / 2500) % 2) { a = "4 Vincula cartao"; b = "D Sair"; }
+        else { a = "1 Novo 2 Inativ."; b = "3 Reativ. D Sair"; }
+        break;
       case Ui::RemoveFinger: a = "Cadastrando"; b = "Retire o dedo"; break;
       case Ui::FirstFinger: a = "Cadastrando"; b = "Coloque o dedo"; break;
       case Ui::SecondFinger: a = "Confirme digital"; b = "Mesmo dedo"; break;
@@ -504,16 +598,27 @@ void displayTick() {
       case Ui::ConfirmPin: a = "Repita senha (6)"; break;
       case Ui::DisableId: a = "Desativar ID:"; b = entry; break;
       case Ui::EnableId: a = "Reativar ID:"; b = entry; break;
+      case Ui::LinkId: a = "Vincular ID:"; b = entry; break;
+      case Ui::CardEnroll: a = "Aproxime cartao"; b = "# pula"; break;
+      case Ui::CardLink: a = "Aproxime cartao"; b = idText(pendingId) + " * cancela"; break;
+      case Ui::AccessPin: a = String("Senha ") + idText(pendingId); break;
       case Ui::ConfirmStatus: a = idText(pendingId) + (enableRequested ? " Reativar?" : " Inativar?"); b = "# Sim D Cancelar"; break;
       default: break;
     }
-    if (ui == Ui::FirstPin || ui == Ui::ConfirmPin) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; if (entry.length()) masked = true; }
+    if (ui == Ui::FirstPin || ui == Ui::ConfirmPin || ui == Ui::AccessPin) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; if (entry.length()) masked = true; }
   } else if (door.state == DoorState::AwaitOpen) { a = "Acesso liberado"; b = idText(door.user); }
   else if (door.state == DoorState::Open) { a = "Porta aberta"; b = idText(door.user); }
   else {
-    a = !storageReady ? "Falha memoria" : "Senha ou digital";
-    if (entry.length()) { for (size_t i = 0; i < entry.length(); ++i) b += '*'; masked = true; }
-    else b = fingerprintReady ? "# OK * Limpar" : "Digital indispon";
+    // B6: ID de até 3 dígitos aparece (não é segredo); entrada maior pode ser o admin, então mascara.
+    // Prefixo de 1 a 3 dígitos do ADMIN_PIN também vira '*' (LCD e espelho; masked fica falso para o
+    // espelho de bancada com SHOW_TYPED_DIGITS não mostrar esse prefixo).
+    a = !storageReady ? "Falha memoria" : "ID + # ou cartao";
+    if (entry.length() > 3 || adminPrefix(entry)) {
+      for (size_t i = 0; i < entry.length(); ++i) b += '*';
+      masked = entry.length() > 3;
+    }
+    else if (entry.length()) b = entry;
+    else b = fingerprintReady ? "ou digital" : "Digital indispon";
   }
 #if LCD_SERIAL_MIRROR
   // Espelho na serial USB: o mesmo texto do LCD, inclusive quando o LCD está ausente.
@@ -552,22 +657,22 @@ MessageProtocol::EventData outbound[16];
 bool photoFresh[16] = {};
 uint8_t head = 0, count = 0; uint32_t transmitAt = 0, syncEpoch = 0, syncAt = 0;
 SerialFrame::Parser receiver;
-const char * const eventNames[] = {"", "device_boot", "storage_error", "user_snapshot", "user_enrolled", "user_disabled", "user_enabled", "password_reset", "admin_login", "access_granted", "access_denied", "door_opened", "door_closed", "entry_expired", "door_timeout", "forced_open", "enroll_failed"};
-const char * const methodNames[] = {"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web"};
-const char * const reasonNames[] = {"", "inactive_or_unknown", "invalid_pin", "unknown_finger", "sensor_error", "simulation", "actuator_enabled", "open_at_boot", "Erro de hash", "Erro ao gravar DY", "Erro na memoria", "Erro de leitura", "Digital ilegivel", "Digital ja usada", "Slot DY orfao", "Falha na pesquisa", "Digitais diferem"};
+const char * const eventNames[] = {"", "device_boot", "storage_error", "user_snapshot", "user_enrolled", "user_disabled", "user_enabled", "password_reset", "admin_login", "access_granted", "access_denied", "door_opened", "door_closed", "entry_expired", "door_timeout", "forced_open", "enroll_failed", "card_linked", "keypad_locked"};
+const char * const methodNames[] = {"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web", "card"};
+const char * const reasonNames[] = {"", "inactive_or_unknown", "invalid_pin", "unknown_finger", "sensor_error", "simulation", "actuator_enabled", "open_at_boot", "Erro de hash", "Erro ao gravar DY", "Erro na memoria", "Erro de leitura", "Digital ilegivel", "Digital ja usada", "Slot DY orfao", "Falha na pesquisa", "Digitais diferem", "unknown_card"};
 uint8_t nameIndex(const char *name, const char * const *names, uint8_t length) {
   for (uint8_t i = 0; i < length; ++i) if (!strcmp(name, names[i])) return i;
   return 0;
 }
 void queueEvent(const char *type, uint16_t id, const char *method, const char *reason) {
-  uint8_t kind = nameIndex(type, eventNames, 17);
+  uint8_t kind = nameIndex(type, eventNames, 19);
   if (!kind || !bootNumber || eventSequence == 0xffffffffUL || count == 16) { ++droppedEvents; return; }
   MessageProtocol::EventData e = {};
   e.messageId = ++eventSequence; e.boot = bootNumber;
   e.uptime = kind == MessageProtocol::AccessGranted ? authorizationAt : millis();
   e.epoch = syncEpoch ? syncEpoch + uint32_t(e.uptime - syncAt) / 1000 : 0;
-  e.kind = kind; e.user = id <= 100 ? uint8_t(id) : 0; e.method = nameIndex(method, methodNames, 9);
-  e.active = activeUser(id); e.reason = nameIndex(reason, reasonNames, 17);
+  e.kind = kind; e.user = id <= 100 ? uint8_t(id) : 0; e.method = nameIndex(method, methodNames, 10);
+  e.active = activeUser(id); e.reason = nameIndex(reason, reasonNames, 18);
   uint8_t slot = (head + count) % 16;
   outbound[slot] = e; photoFresh[slot] = kind == MessageProtocol::AccessGranted; ++count;
 }
@@ -687,8 +792,8 @@ void linkTickBody(bool sensorWait) {
   }
   linkTx.tick();
 }
-// Reset/busca chamados de dentro do enlace (resetPassword -> ownerOfPin) não reentram:
-// só copiam a UART para linkStash, sem parsear; o processamento fica para a chamada seguinte.
+// Reset/gravação chamados de dentro do enlace (resetPassword -> saveRecord -> ServicedEeprom::update)
+// não reentram: só copiam a UART para linkStash, sem parsear; o processamento fica para a chamada seguinte.
 void linkTick(bool sensorWait = false) {
   if (linkBusy) {
     while (linkStashLen < sizeof linkStash && Serial2.available()) linkStash[linkStashLen++] = uint8_t(Serial2.read());
@@ -727,7 +832,11 @@ void serialTick() {
     } else if (line == "LIST") {
       for (uint16_t id = 1; id <= lastId; ++id) {
         doorTick(); outputsTick();
-        if (exists(id)) { Serial.print("ID "); Serial.print(id); Serial.println(activeUser(id) ? " ativo" : " inativo"); }
+        if (exists(id)) {
+          CardStore::Tag tag;
+          Serial.print("ID "); Serial.print(id); Serial.print(activeUser(id) ? " ativo" : " inativo");
+          Serial.println(CardStore::read(EEPROM, id, tag) ? " cartao=sim" : " cartao=nao");
+        }
       }
     } else if (line.startsWith("RESET ")) {
       unsigned id = 0; char pin[8] = {}, confirmation[8] = {}, extra[2] = {};
@@ -739,6 +848,81 @@ void serialTick() {
 }
 
 
+// Cartão RFID (RC522). Access lê para autorizar; CardEnroll (cadastro) e CardLink (menu 4) gravam.
+// Só a leitura do cartão fica aqui; a gravação usa ServicedEeprom, que atende a porta entre bytes.
+bool rfidVersionOk() {
+  const uint8_t version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
+  return version != 0x00 && version != 0xff;
+}
+// Religa o RC522 a cada 15 s enquanto estiver indisponível (como o DY50).
+void rfidRecoveryTick() {
+  if (uint32_t(millis() - lastRfidRecovery) < 15000) return;
+  lastRfidRecovery = millis();
+  // A3: o RC522 que estava pronto também é conferido; se falhar, a próxima volta o religa.
+  if (rfidReady) { if (!rfidVersionOk()) rfidReady = false; return; }
+  rfid.PCD_Init(); rfidReady = rfidVersionOk();
+}
+bool sameRecentCard(const CardStore::Tag &tag) {
+  return tag.size && uint32_t(millis() - lastCardAt) < 2000 && tag.size == lastCard.size &&
+         !memcmp(tag.uid, lastCard.uid, tag.size);
+}
+// Dono do UID entre IDs com registro de usuário. Slot de cartão sem registro (órfão) não conta.
+uint8_t cardOwner(const uint8_t *uid, uint8_t size) {
+  if (!CardStore::validSize(size)) return 0;
+  for (uint8_t id = 1; id <= MAX_USERS; ++id) {
+    CardStore::Tag tag;
+    if (CardStore::read(EEPROM, id, tag) && tag.size == size && !memcmp(tag.uid, uid, size) && exists(id)) return id;
+  }
+  return 0;
+}
+void cardAccess(const CardStore::Tag &tag) {
+  if (!storageReady) {
+    notice("Falha memoria", "Acesso negado", true);
+    audit("access_denied", 0, "card", "Erro na memoria"); return;
+  }
+  const uint8_t id = cardOwner(tag.uid, tag.size);
+  if (!id) {
+    notice("Acesso negado", "Cartao desconh.", true);
+    audit("access_denied", 0, "card", "unknown_card"); return;
+  }
+  authorize(id, "card");
+}
+void cardTick() {
+  if (!rfidReady || uint32_t(millis() - lastRfidPoll) < 200) return;
+  lastRfidPoll = millis();
+  if (door.state != DoorState::Idle || !door.closed) return;
+  const bool access = ui == Ui::Access;
+  if (!access && ui != Ui::CardEnroll && ui != Ui::CardLink) return;
+  if (access && noticeActive()) return;
+  // A2: a leitura do RC522 bloqueia ~25-36 ms na SPI; atende a UART da CAM antes dela.
+  linkTick(true);
+  if (!rfid.PICC_IsNewCardPresent() || !rfid.PICC_ReadCardSerial()) return;
+  CardStore::Tag tag = {};
+  const uint8_t size = rfid.uid.size;
+  if (CardStore::validSize(size)) { tag.size = size; memcpy(tag.uid, rfid.uid.uidByte, size); }
+  rfid.PICC_HaltA(); rfid.PCD_StopCrypto1();
+  if (sameRecentCard(tag)) return;
+  if (tag.size) { lastCard = tag; lastCardAt = millis(); }
+  if (access) { cardAccess(tag); return; }
+  if (!tag.size) { notice("Cartao invalido", "Use outro", true); return; }
+  if (ui == Ui::CardEnroll) {
+    if (cardOwner(tag.uid, tag.size)) { notice("Cartao em uso", "Use outro", true); return; }
+    pendingCard = tag; cardPending = true;
+    ui = Ui::FirstPin; entry = ""; uiTouched = millis();
+    notice("Cartao lido", "Crie senha (6)", false, 1000);
+    return;
+  }
+  // CardLink (menu 4): o cartão de outro usuário é recusado; o de quem já é o dono é regravado igual.
+  const uint8_t owner = cardOwner(tag.uid, tag.size);
+  if (owner && owner != pendingId) { notice("Cartao em uso", "Use outro", true); return; }
+  const uint16_t id = pendingId;
+  const uint32_t generation = doorGeneration;
+  ServicedEeprom storage;
+  if (!CardStore::write(storage, id, tag)) { resetUi(); notice("Erro na memoria", "Cartao nao salvo", true); return; }
+  audit("card_linked", id, "admin");
+  resetUi();
+  if (doorGeneration == generation) notice("Cartao vinculado", idText(id));
+}
 void setup() {
   digitalWrite(LOCK_PIN, !LOCK_ON); pinMode(LOCK_PIN, OUTPUT);
   digitalWrite(BUZZER_PIN, LOW); pinMode(BUZZER_PIN, OUTPUT);
@@ -755,8 +939,11 @@ void setup() {
     UserStore::Record record; int8_t state = UserStore::load(EEPROM, id, record);
     if (state < 0) storageReady = false; else if (state == 1) lastId = id;
   }
+  // A1: cartão de ID sem registro (órfão de cadastro interrompido) é apagado antes do uso.
+  if (storageReady) for (uint16_t id = lastId + 1; id <= MAX_USERS; ++id) CardStore::clear(EEPROM, uint8_t(id));
   finger.begin(57600);
   fingerprintReady = finger.verifyPassword() && finger.getParameters() == FINGERPRINT_OK && finger.capacity > MAX_USERS;
+  SPI.begin(); rfid.PCD_Init(); rfidReady = rfidVersionOk(); lastRfidRecovery = millis();
   rawClosed = stableClosed = digitalRead(BUTTON_1) == LOW && digitalRead(BUTTON_2) == LOW;
   rawSince = millis(); door.begin(stableClosed, millis()); resetUi(); doorServiceReady = true;
   audit("device_boot", 0, "system", LOCK_MODE ? "actuator_enabled" : "simulation");
@@ -766,15 +953,16 @@ void setup() {
   Serial.print(F("BOOT boot=")); Serial.print(bootNumber);
   Serial.print(F(" storage=")); Serial.print(storageReady ? F("ok") : F("falha"));
   Serial.print(F(" dy50=")); Serial.print(fingerprintReady ? F("ok") : F("indisponivel"));
+  Serial.print(F(" rfid=")); Serial.print(rfidReady ? F("ok") : F("indisponivel"));
   Serial.print(F(" lock_mode=")); Serial.println(LOCK_MODE);
 }
 void loop() {
   doorTick(); outputsTick();
-  if (ui != Ui::Access && uint32_t(millis() - uiTouched) >= UI_TIMEOUT_MS) {
+  if (ui != Ui::Access && ui != Ui::AccessPin && uint32_t(millis() - uiTouched) >= UI_TIMEOUT_MS) {
     resetUi(); notice("Tempo esgotado", "Cadastro expirou");
   }
   expireEntry();
-  handleKey(keypad.getKey()); fingerprintTick(); fingerprintRecoveryTick(); linkTick(); serialTick();
+  handleKey(keypad.getKey()); fingerprintTick(); fingerprintRecoveryTick(); cardTick(); rfidRecoveryTick(); linkTick(); serialTick();
   static uint16_t snapshot = 1;
   if (snapshot <= lastId && count == 0) {
     if (exists(snapshot)) audit("user_snapshot", snapshot, "system");

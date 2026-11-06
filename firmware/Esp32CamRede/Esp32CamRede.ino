@@ -24,9 +24,9 @@ SerialFrame::Parser parser;
 bool cameraReady = false;
 bool networkReady = false;
 uint32_t lastBoot = 0, lastEvent = 0;
-const char * const eventNames[] = {"", "device_boot", "storage_error", "user_snapshot", "user_enrolled", "user_disabled", "user_enabled", "password_reset", "admin_login", "access_granted", "access_denied", "door_opened", "door_closed", "entry_expired", "door_timeout", "forced_open", "enroll_failed"};
-const char * const methodNames[] = {"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web"};
-const char * const reasonNames[] = {"", "inactive_or_unknown", "invalid_pin", "unknown_finger", "sensor_error", "simulation", "actuator_enabled", "open_at_boot", "Erro de hash", "Erro ao gravar DY", "Erro na memoria", "Erro de leitura", "Digital ilegivel", "Digital ja usada", "Slot DY orfao", "Falha na pesquisa", "Digitais diferem"};
+const char * const eventNames[] = {"", "device_boot", "storage_error", "user_snapshot", "user_enrolled", "user_disabled", "user_enabled", "password_reset", "admin_login", "access_granted", "access_denied", "door_opened", "door_closed", "entry_expired", "door_timeout", "forced_open", "enroll_failed", "card_linked", "keypad_locked"};
+const char * const methodNames[] = {"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web", "card"};
+const char * const reasonNames[] = {"", "inactive_or_unknown", "invalid_pin", "unknown_finger", "sensor_error", "simulation", "actuator_enabled", "open_at_boot", "Erro de hash", "Erro ao gravar DY", "Erro na memoria", "Erro de leitura", "Digital ilegivel", "Digital ja usada", "Slot DY orfao", "Falha na pesquisa", "Digitais diferem", "unknown_card"};
 const char * const resetReasons[] = {"ok", "unknown_user", "device_busy", "invalid_pin", "pin_in_use", "storage_error"};
 // Contadores enviados no heartbeat; saturam em UINT32_MAX e são zerados só no reboot.
 // rejected: descartes no estágio evento; photo_rejected: descartes no estágio foto (evento já aceito).
@@ -137,7 +137,7 @@ bool sendEvent(const Item &item, int *status = nullptr) {
   doc["type"]=eventNames[item.event.kind]; doc["method"]=methodNames[item.event.method];
   doc["user_id"]=item.event.user; doc["active"]=bool(item.event.active);
   doc["reason"] = item.event.kind == AccessGranted && !item.photo ? "photo_unavailable" :
-    (item.event.reason < 17 ? reasonNames[item.event.reason] : "");
+    (item.event.reason < 18 ? reasonNames[item.event.reason] : "");
   doc["uptime_ms"]=item.event.uptime;
   if (item.event.epoch) doc["epoch"]=item.event.epoch; else doc["epoch"]=nullptr;
   String body,response; serializeJson(doc,body); JsonDocument ack;

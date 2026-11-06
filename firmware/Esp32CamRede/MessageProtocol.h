@@ -10,9 +10,10 @@ enum Type : uint8_t { Event = 1, Ack = 2, Clock = 3, Reset = 4, ResetResult = 5,
 enum EventType : uint8_t {
   DeviceBoot = 1, StorageError, UserSnapshot, UserEnrolled, UserDisabled,
   UserEnabled, PasswordReset, AdminLogin, AccessGranted, AccessDenied,
-  DoorOpened, DoorClosed, EntryExpired, DoorTimeout, ForcedOpen, EnrollFailed
+  DoorOpened, DoorClosed, EntryExpired, DoorTimeout, ForcedOpen, EnrollFailed,
+  CardLinked, KeypadLocked
 };
-enum Method : uint8_t { None = 0, Password, Fingerprint, Admin, Keypad, System, Sensor, Usb, Web };
+enum Method : uint8_t { None = 0, Password, Fingerprint, Admin, Keypad, System, Sensor, Usb, Web, Card };
 constexpr size_t kEventLength = 27;
 struct EventData {
   uint32_t messageId, boot, uptime, epoch;
@@ -26,8 +27,8 @@ inline uint32_t get32(const uint8_t *p) {
   return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16 | uint32_t(p[3]) << 24;
 }
 inline bool validEvent(const EventData &e) {
-  return e.messageId && e.boot && e.kind >= DeviceBoot && e.kind <= EnrollFailed &&
-    e.user <= 100 && e.method <= Web && e.active <= 1 &&
+  return e.messageId && e.boot && e.kind >= DeviceBoot && e.kind <= KeypadLocked &&
+    e.user <= 100 && e.method <= Card && e.active <= 1 &&
     (!e.epoch || (e.epoch >= 1700000000UL && e.epoch <= 4102444800UL));
 }
 inline bool encodeEvent(const EventData &e, uint8_t *out, size_t capacity) {

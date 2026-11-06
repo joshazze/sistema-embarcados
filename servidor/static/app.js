@@ -6,10 +6,10 @@ const labels = {
   user_disabled:'Pessoa desativada',user_enabled:'Pessoa reativada',password_reset:'Senha redefinida',
   admin_login:'Administrador autenticado',access_granted:'Acesso autorizado',access_denied:'Acesso negado',
   door_opened:'Porta aberta',door_closed:'Porta fechada',entry_expired:'Prazo de abertura expirou',
-  door_timeout:'Porta aberta por mais de 5 min',forced_open:'Abertura sem autorização',enroll_failed:'Falha no cadastro'
+  door_timeout:'Porta aberta por mais de 5 min',forced_open:'Abertura sem autorização',enroll_failed:'Falha no cadastro',card_linked:'Cartão vinculado',keypad_locked:'Teclado bloqueado'
 };
-const methods = {password:'Senha',fingerprint:'Digital',admin:'Administrador',keypad:'Teclado',system:'Sistema',sensor:'Sensor',usb:'USB',web:'Página web'};
-const reasons = {ok:'Concluído',device_busy:'Controlador ocupado: tente novamente após fechar a porta e sair do cadastro.',unknown_user:'ID inexistente',invalid_pin:'Senha inválida',pin_in_use:'Senha já pertence a outro ID',storage_error:'Falha ao salvar',inactive_or_unknown:'Cadastro inativo ou desconhecido',unknown_finger:'Digital desconhecida',sensor_error:'Erro no leitor',simulation:'Acionamento elétrico desabilitado',actuator_enabled:'Acionamento elétrico habilitado',open_at_boot:'Porta aberta ao iniciar',photo_unavailable:'Foto indisponível',expired:'Expirada (sem confirmação em 24 h)'};
+const methods = {password:'Senha',fingerprint:'Digital',admin:'Administrador',keypad:'Teclado',system:'Sistema',sensor:'Sensor',usb:'USB',web:'Página web',card:'Cartão RFID'};
+const reasons = {ok:'Concluído',device_busy:'Controlador ocupado: tente novamente após fechar a porta e sair do cadastro.',unknown_user:'ID inexistente',invalid_pin:'Senha inválida',pin_in_use:'Senha já pertence a outro ID',storage_error:'Falha ao salvar',inactive_or_unknown:'Cadastro inativo ou desconhecido',unknown_finger:'Digital desconhecida',sensor_error:'Erro no leitor',simulation:'Acionamento elétrico desabilitado',actuator_enabled:'Acionamento elétrico habilitado',open_at_boot:'Porta aberta ao iniciar',photo_unavailable:'Foto indisponível',expired:'Expirada (sem confirmação em 24 h)',unknown_card:'Cartão desconhecido'};
 const idLabel = id => `ID ${String(id).padStart(3,'0')}`;
 const dateLabel = seconds => new Date(seconds * 1000).toLocaleString('pt-BR');
 function message(text, error=false, source='other'){ $('message').textContent=text; $('message').className=error?'error':'success'; messageSource=source; }

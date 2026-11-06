@@ -1,4 +1,7 @@
-"""UART servida durante a busca de senha (ownerOfPin) e expiração da senha parcial no sketch Mega."""
+"""UART servida durante a escrita de senha/registro e expiração da senha parcial no sketch Mega.
+
+A varredura de senhas (ownerOfPin) foi removida: a senha é comparada só com o registro do ID.
+"""
 from pathlib import Path
 import os
 import subprocess
@@ -11,7 +14,7 @@ MEGA = Path(__file__).resolve().parents[1] / 'firmware/MegaControlador'
 PREFIX = LOGIC_PREFIX.replace('void linkTick(bool) {}\n', '')  # o linkTick real vem do trecho do enlace
 for _old, _new in [
     ('#include <string>', '#include <string>\n#include <vector>'),
-    ('#include "BuzzerLogic.h"', '#include "BuzzerLogic.h"\n#include "MessageProtocol.h"\n#include "SerialFrame.h"'),
+    ('#include "BuzzerLogic.h"', '#include "BuzzerLogic.h"\n#include "CardStore.h"\n#include "MessageProtocol.h"\n#include "SerialFrame.h"'),
     ('void queueEvent(const char *,uint16_t,const char *,const char *) {}', 'void queueEvent(const char *,uint16_t,const char *,const char *);'),
     ('void doorTick() {', 'void doorTick();\nvoid doorTickBase() {'),
     ('String(const std::string &s):std::string(s) {}', 'String(const std::string &s):std::string(s) {} String substring(size_t a,size_t b) const { return String(substr(a,b-a)); }'),
@@ -52,41 +55,6 @@ DISPLAY_MOCKS = r'''
 #define LCD_SERIAL_MIRROR 1
 struct SerialLcdMock { std::string log; void print(const char *s) { log += s; } void print(const std::string &s) { log += s; } void println(const std::string &s) { log += s + "\n"; } } Serial;
 struct FakeLCD { int writes=0; void begin(int,int) {} void print(const char *) {} void setCursor(int,int) {} void write(uint8_t) { ++writes; } } lcd;
-'''
-MAIN_ACK = r'''
-int main() {
- door.begin(true,now); resetUi();
- queueEvent("access_granted",1,"password",""); linkTick(false);
- assert(count==1 && !Serial2.output.empty());
- // ACK da CAM chega na 3a checagem da busca; a fila deve esvaziar antes do fim dos 100 hashes.
- hook=[]() {
-   ++scanTicks;
-   if (scanTicks==3) pushInput(ackFrame(1,bootNumber));
-   if (!emptyAt && count==0) emptyAt=scanTicks;
- };
- uint16_t owner=ownerOfPin("999999");
- hook=nullptr;
- assert(owner==0);
- assert(emptyAt>0 && emptyAt<scanTicks);
- assert(count==0 && Serial2.pos==Serial2.input.size());
- return 0;
-}
-'''
-MAIN_RESET = r'''
-int main() {
- createUser1();
- // Reset chega no meio da busca: lido e adiado, sem trocar a senha antes do fim da busca.
- scanTicks=0;
- hook=[]() { if (++scanTicks==5) pushInput(resetFrame(7,"654321",42)); };
- uint16_t owner=ownerOfPin("999999");
- hook=nullptr;
- assert(owner==0);
- assert(Serial2.pos==Serial2.input.size() && replyCount==1);
- assert(matches(1,"123456") && !matches(1,"654321"));
- linkTick(false);
- assert(replyCount==0 && matches(1,"654321") && !matches(1,"123456"));
- return 0;
-}
 '''
 MAIN_REENTRY = r'''
 int main() {
@@ -172,6 +140,38 @@ int main() {
  return 0;
 }
 '''
+# Reset chega no meio da gravação de um cadastro (ServicedEeprom::update): fica adiado (deferredReset),
+# não troca a senha antes do fim da gravação e é executado na chamada seguinte, com ResetResult ok.
+MAIN_RESET_SAVE = r'''
+int main() {
+ createUser1();
+ UserRecord record = {}; record.active=1;
+ for (int i=0;i<4;++i) record.salt[i]=uint8_t(i+7);
+ digest("222222",record.salt,record.hash);
+ Serial2.output.clear();
+ scanTicks=0;
+ hook=[]() { if (++scanTicks==5) pushInput(resetFrame(42,"654321",42)); };
+ assert(saveRecord(2,record));
+ hook=nullptr;
+ assert(scanTicks>=5 && Serial2.pos==Serial2.input.size());
+ assert(exists(2) && matches(1,"123456") && !matches(1,"654321"));
+ assert(replyCount==1 && linkReplies[replyHead].deferredReset);
+ for (int i=0;i<20;++i) linkTick(false);
+ assert(replyCount==0 && matches(1,"654321") && !matches(1,"123456"));
+ // ACK: ResetResult com o cmd 42, resultado ok (1) e motivo 0 (ok).
+ SerialFrame::Parser leitor; int achados=0;
+ for (uint8_t b : Serial2.output) {
+   if (!leitor.feed(b, 0)) continue;
+   const uint8_t *p = leitor.data();
+   if (leitor.size() == 8 && p[1] == MessageProtocol::ResetResult) {
+     ++achados;
+     assert(MessageProtocol::get32(p+2) == 42 && p[6] == 1 && p[7] == 0);
+   }
+ }
+ assert(achados == 1);
+ return 0;
+}
+'''
 MAIN_EXPIRY = r'''
 int main() {
  resetUi(); noticeDuration=0; entry=""; noticeLine1="";
@@ -207,12 +207,6 @@ class UartServidaTests(unittest.TestCase):
             result = subprocess.run([str(binary)], capture_output=True, text=True)
             self.assertEqual(result.returncode, 0, result.stderr)
 
-    def test_ack_processed_during_owner_scan(self):
-        self._run(MAIN_ACK)
-
-    def test_reset_during_owner_scan_is_deferred(self):
-        self._run(MAIN_RESET)
-
     def test_link_tick_is_not_reentered(self):
         self._run(MAIN_REENTRY)
 
@@ -226,6 +220,9 @@ class UartServidaTests(unittest.TestCase):
 
     def test_bytes_during_link_reset_are_stashed_in_order(self):
         self._run(MAIN_STASH)
+
+    def test_reset_during_cadastro_write_is_deferred(self):
+        self._run(MAIN_RESET_SAVE)
 
     def test_partial_pin_expires_after_30s_without_key(self):
         self._run(MAIN_EXPIRY)

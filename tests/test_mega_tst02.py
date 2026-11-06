@@ -44,6 +44,7 @@ PREFIXO_HW = r'''
 #include <vector>
 #include "DoorLogic.h"
 #include "BuzzerLogic.h"
+#include "CardStore.h"
 #include "Config.example.h"
 class String : public std::string {
  public: using std::string::string; using std::string::operator=;
@@ -399,11 +400,18 @@ int main() {
  // (e) aviso de cadastro com ID
  notice("Cadastrado", idText(7)); tela("Cadastrado", "ID 007");
  noticeDuration = 0;
- // (f) ocioso: senha mascarada, prontidão do DY50 e falha de memória
- entry = "12"; tela("Senha ou digital", "**");
- entry = ""; tela("Senha ou digital", "# OK * Limpar");
- fingerprintReady = false; tela("Senha ou digital", "Digital indispon"); fingerprintReady = true;
- storageReady = false; tela("Falha memoria", "# OK * Limpar"); storageReady = true;
+ // (f) ocioso: ID de até 3 dígitos aparece; entrada maior (pode ser o admin) mascara; DY50 e memória
+ entry = "12"; tela("ID + # ou cartao", "12");
+ entry = "1234"; tela("ID + # ou cartao", "****");
+ entry = ""; tela("ID + # ou cartao", "ou digital");
+ fingerprintReady = false; tela("ID + # ou cartao", "Digital indispon"); fingerprintReady = true;
+ storageReady = false; tela("Falha memoria", "ou digital"); storageReady = true;
+ // (f2) tela de senha do ID (B1): mascara com '*'; '*' vazio volta ao ID (teste de texto só)
+ ui = Ui::AccessPin; pendingId = 1; entry = "12"; tela("Senha ID 001", "**");
+ entry = ""; tela("Senha ID 001", "");
+ // (f3) teclado travado (B4): texto de contagem em 16 colunas
+ resetUi(); keypadLockActive = true; keypadLockedAt = now; tela("Teclado travado", "Aguarde 60 s");
+ keypadLockActive = false; pinFailures = 0;
  // (g) cadastro: senha mascarada
  ui = Ui::FirstPin; entry = "123"; tela("Crie senha (6)", "***");
  ui = Ui::ConfirmPin; entry = ""; tela("Repita senha (6)", "");
@@ -433,27 +441,32 @@ int main() {
  // Access, entrada vazia
  tecla('D'); assert(entry == "" && ui == Ui::Access && audits.empty());
  tecla('*'); assert(entry == "");
- tecla('#'); assert(noticeLine1 == "Entrada invalida" && noticeLine2 == "6 ou 10 digitos" && noticeError && entry == "");
+ tecla('#'); assert(noticeLine1 == "Entrada invalida" && noticeLine2 == "ID e # ou admin" && noticeError && entry == "");
  // Access, entrada parcial
  digita("12"); assert(entry == "12");
  tecla('*'); assert(entry == "");
  digita("12"); tecla('D'); assert(entry == "" && ui == Ui::Access);
  digita("12345"); tecla('#'); assert(noticeLine1 == "Entrada invalida" && entry == "" && audits.empty());
+ // ID 1 pede a senha; senha errada nega com o ID tentado na auditoria (B2)
+ digita("1"); tecla('#'); assert(ui == Ui::AccessPin && pendingId == 1 && entry == "");
  digita("999999"); tecla('#');
- assert(noticeLine1 == "Acesso negado" && noticeLine2 == "Senha incorreta" && entry == "");
- assert(audits.size() == 1 && audits[0] == "access_denied|0|password|invalid_pin");
+ assert(noticeLine1 == "Acesso negado" && noticeLine2 == "Senha incorreta" && entry == "" && ui == Ui::Access);
+ assert(audits.size() == 1 && audits[0] == "access_denied|1|password|invalid_pin");
  audits.clear();
  // limite de 10 digitos na tela de acesso; 10 que nao sao o admin nao sao PIN valido
  digita("12345678901"); assert(entry == "1234567890");
  tecla('#'); assert(noticeLine1 == "Entrada invalida" && entry == "");
+ // 10 digitos que não são o admin contam como falha (com a senha errada anterior: 2)
+ assert(audits.size() == 1 && audits[0] == "access_denied|0|keypad|invalid_pin" && pinFailures == 2);
+ audits.clear();
  tecla('*');
- // senha correta libera o ciclo
- digita("123456"); tecla('#');
+ // senha correta do ID 1 libera o ciclo
+ digita("1"); tecla('#'); digita("123456"); tecla('#');
  assert(door.state == DoorState::AwaitOpen && door.user == 1 && entry == "");
  assert(audits.size() == 1 && audits[0] == "access_granted|1|password|");
  audits.clear();
  // com o ciclo em andamento: a senha correta é ignorada sem aviso; D e * não cancelam o ciclo
- digita("123456"); tecla('#');
+ digita("1"); tecla('#'); digita("123456"); tecla('#');
  assert(door.state == DoorState::AwaitOpen && door.user == 1 && entry == "" && audits.empty() && ui == Ui::Access);
  digita("12"); tecla('D'); assert(door.state == DoorState::AwaitOpen && door.user == 1);
  tecla('*'); assert(entry == "" && door.state == DoorState::AwaitOpen);
@@ -519,7 +532,7 @@ class TeclasTests(unittest.TestCase):
         _executar(PREFIXO_CRED + corpo + teclado + MAIN_TECLAS)
 
 
-# ---------------------------------------------------------------- item 5: pin_in_use
+# ---------------------------------------------------------------- item 5 (B5): senha repetida
 MAIN_PIN_IN_USE = r'''
 int main() {
  door.begin(true, now); resetUi(); noticeDuration = 0; storageReady = true; fingerprintReady = true;
@@ -529,22 +542,15 @@ int main() {
  cadastra(1, "111111"); cadastra(2, "222222");
  assert(exists(1) && exists(2));
  UserRecord r;
- // senha de outro ID (ativo): pin_in_use, e nada muda no ID 1
- assert(!strcmp(resetPassword(1, "222222", "usb", 0), "pin_in_use"));
- assert(matches(1, "111111") && !matches(1, "222222"));
- assert(readRecord(1, r) && r.lastWebToken == 0);
- // mesmo caminho pela web (com token): falha e o token não é gravado
- assert(!strcmp(resetPassword(1, "222222", "web", 0x55), "pin_in_use"));
- assert(readRecord(1, r) && r.lastWebToken == 0 && matches(1, "111111"));
- // dono inativo continua ocupando a senha (unicidade não depende de estar ativo)
- assert(changeStatus(2, false));
- assert(!strcmp(resetPassword(1, "222222", "usb", 0), "pin_in_use"));
- assert(changeStatus(2, true));
- // o próprio ID pode redefinir para a senha que já tem
- assert(!strcmp(resetPassword(2, "222222", "usb", 0), "ok") && matches(2, "222222"));
- // senha livre: ok
- assert(!strcmp(resetPassword(1, "333333", "usb", 0), "ok") && matches(1, "333333"));
- // com a tela ocupada, device_busy vem antes da checagem de unicidade
+ // B5: senha de outro ID é aceita no reset (senhas podem repetir); só o registro do ID 1 muda
+ assert(!strcmp(resetPassword(1, "222222", "usb", 0), "ok"));
+ assert(matches(1, "222222") && matches(2, "222222") && !matches(1, "111111"));
+ // mesmo caminho pela web (com token): ok e o token fica no registro do ID 1
+ assert(!strcmp(resetPassword(1, "111111", "web", 0x55), "ok"));
+ assert(readRecord(1, r) && r.lastWebToken == 0x55 && matches(1, "111111"));
+ // B5: cadastro com senha já usada por outro ID também é aceito
+ cadastra(3, "222222"); assert(exists(3) && matches(3, "222222"));
+ // com a tela ocupada, device_busy
  ui = Ui::Menu;
  assert(!strcmp(resetPassword(1, "222222", "usb", 0), "device_busy"));
  resetUi();
@@ -555,7 +561,7 @@ int main() {
 
 
 class PinEmUsoTests(unittest.TestCase):
-    def test_reset_de_senha_ja_usada_por_outro_id_retorna_pin_in_use(self):
+    def test_reset_e_cadastro_aceitam_senha_ja_usada_por_outro_id(self):
         src = _ler_ino()
         corpo = _trecho(src, 'enum class Ui', 'void handleKey(')
         _executar(PREFIXO_CRED + corpo + MAIN_PIN_IN_USE)

@@ -15,3 +15,7 @@ constexpr uint32_t ENTRY_MS = 60000, OPEN_MS = 300000, UI_TIMEOUT_MS = 60000;
 // #define LCD_SERIAL_MIRROR 0  // desliga o espelho do LCD na serial USB
 // Bancada: descomente para o espelho "LCD| ..." da serial mostrar a senha digitada (o LCD continua com *). Não cole esses logs em chats.
 // #define SHOW_TYPED_DIGITS 1
+// RC522 (leitor de cartão RFID, SPI): padrão SS=D53 e RST=D49, sem precisar de Config.h.
+// Só para mudar os pinos, descomente e ajuste (opcional):
+// #define RFID_SS_PIN 53
+// #define RFID_RST_PIN 49
