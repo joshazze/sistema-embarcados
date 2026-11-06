@@ -55,6 +55,7 @@ uint32_t bootNumber = 0, eventSequence = 0, droppedEvents = 0;
 void doorTick();
 void outputsTick();
 void linkTick(bool sensorWait);
+void readerResetTick();
 bool doorServiceReady = false;
 // A biblioteca do DY50 pode aguardar UART por até um segundo; continuar
 // atendendo a porta durante a espera em vez de bloquear seus temporizadores.
@@ -117,6 +118,15 @@ uint32_t lastFingerPoll = 0, lastLcd = 0, authorizationAt = 0;
 uint32_t doorGeneration = 0;
 bool rawClosed = false, stableClosed = false;
 uint32_t rawSince = 0;
+// Filtro dos sensores D30/D31: a leitura bruta só vira estado se ficar igual por este tempo
+// (cada borda reinicia a janela). Era 50 ms; 200 ms ignora o ruído do pulso da fechadura.
+constexpr uint32_t kDoorDebounceMs = 200;
+// Reinício dos leitores após a fechadura: lockReleasedAt marca quando a saída voltou a LOW;
+// readerResetStage 1 = falta o reinício de 1 s, 2 = falta o de 1 s + 3 s, 0 = nada agendado.
+constexpr uint32_t kReaderResetFirstMs = 1000, kReaderResetSecondMs = 3000;
+bool lockEnergized = false;
+uint8_t readerResetStage = 0;
+uint32_t lockReleasedAt = 0;
 bool serialAuthed = false, serialOverflow = false;
 uint32_t serialTouched = 0;
 String serialLine;
@@ -532,6 +542,9 @@ void outputsTick() {
     if (LOCK_MODE == 2) energized = true;
   }
   digitalWrite(LOCK_PIN, energized ? LOCK_ON : !LOCK_ON);
+  // Fim do pulso (modo 1) ou desenergização (modo 2): agenda o reinício dos leitores.
+  if (lockEnergized && !energized) { lockReleasedAt = now; readerResetStage = 1; }
+  lockEnergized = energized;
   // Porta aberta sem autorização (ForcedOpen ou boot com porta aberta): bipe rápido até fechar.
   const bool forcedAlarm = door.state == DoorState::Alarm && door.user == 0;
   const bool buzz = forcedAlarm ? uint32_t(now - door.since) % 500 < 250 : buzzer.isOn(now);
@@ -547,7 +560,7 @@ void doorTick() {
   const uint32_t now = millis();
   const bool current = digitalRead(BUTTON_1) == LOW && digitalRead(BUTTON_2) == LOW;
   if (current != rawClosed) { rawClosed = current; rawSince = now; }
-  if (uint32_t(now - rawSince) >= 50) stableClosed = rawClosed;
+  if (uint32_t(now - rawSince) >= kDoorDebounceMs) stableClosed = rawClosed;
   DoorEvent e = door.tick(stableClosed, now, ENTRY_MS, OPEN_MS);
   buzzer.onEvent(e, now);
   if (e == DoorEvent::None) return;
@@ -562,11 +575,15 @@ void doorTick() {
 }
 // Religa o DY50 a cada 10 s, só com a tela de acesso livre, porta fechada e teclado vazio.
 // verifyPassword bloqueia ~1 s sem varrer o teclado.
+// Handshake do DY50 (o mesmo do setup): senha, parâmetros e capacidade suficiente.
+bool fingerprintHandshake() {
+  return finger.verifyPassword() && finger.getParameters() == FINGERPRINT_OK && finger.capacity > MAX_USERS;
+}
 void fingerprintRecoveryTick() {
   if (fingerprintReady || uint32_t(millis() - lastFingerRecovery) < 10000) return;
   if (ui != Ui::Access || door.state != DoorState::Idle || !door.closed || noticeActive() || entry.length()) return;
   lastFingerRecovery = millis();
-  fingerprintReady = finger.verifyPassword() && finger.getParameters() == FINGERPRINT_OK && finger.capacity > MAX_USERS;
+  fingerprintReady = fingerprintHandshake();
 }
 // LCD 1602 em modo 4 bits (LiquidCrystal): não há detecção de módulo ausente.
 void lcdBoot() { lcd.begin(16, 2); lcd.print("Iniciando..."); }
@@ -857,13 +874,16 @@ bool rfidVersionOk() {
   const uint8_t version = rfid.PCD_ReadRegister(MFRC522::VersionReg);
   return version != 0x00 && version != 0xff;
 }
+// PCD_Init refaz o reset do RC522, os registradores e liga a antena (PCD_AntennaOn).
+// Bloqueia ~50-150 ms (espera do reset na biblioteca).
+void rfidReinit() { rfid.PCD_Init(); rfidReady = rfidVersionOk(); }
 // Religa o RC522 a cada 15 s enquanto estiver indisponível (como o DY50).
 void rfidRecoveryTick() {
   if (uint32_t(millis() - lastRfidRecovery) < 15000) return;
   lastRfidRecovery = millis();
   // A3: o RC522 que estava pronto também é conferido; se falhar, a próxima volta o religa.
   if (rfidReady) { if (!rfidVersionOk()) rfidReady = false; return; }
-  rfid.PCD_Init(); rfidReady = rfidVersionOk();
+  rfidReinit();
 }
 bool sameRecentCard(const CardStore::Tag &tag) {
   return tag.size && uint32_t(millis() - lastCardAt) < 2000 && tag.size == lastCard.size &&
@@ -945,8 +965,8 @@ void setup() {
   // A1: cartão de ID sem registro (órfão de cadastro interrompido) é apagado antes do uso.
   if (storageReady) for (uint16_t id = lastId + 1; id <= MAX_USERS; ++id) CardStore::clear(EEPROM, uint8_t(id));
   finger.begin(57600);
-  fingerprintReady = finger.verifyPassword() && finger.getParameters() == FINGERPRINT_OK && finger.capacity > MAX_USERS;
-  SPI.begin(); rfid.PCD_Init(); rfidReady = rfidVersionOk(); lastRfidRecovery = millis();
+  fingerprintReady = fingerprintHandshake();
+  SPI.begin(); rfidReinit(); lastRfidRecovery = millis();
   rawClosed = stableClosed = digitalRead(BUTTON_1) == LOW && digitalRead(BUTTON_2) == LOW;
   rawSince = millis(); door.begin(stableClosed, millis()); resetUi(); doorServiceReady = true;
   audit("device_boot", 0, "system", LOCK_MODE ? "actuator_enabled" : "simulation");
@@ -965,11 +985,30 @@ void loop() {
     resetUi(); notice("Tempo esgotado", "Cadastro expirou");
   }
   expireEntry();
-  handleKey(keypad.getKey()); fingerprintTick(); fingerprintRecoveryTick(); cardTick(); rfidRecoveryTick(); linkTick(); serialTick();
+  handleKey(keypad.getKey()); fingerprintTick(); fingerprintRecoveryTick(); cardTick(); rfidRecoveryTick(); readerResetTick(); linkTick(); serialTick();
   static uint16_t snapshot = 1;
   if (snapshot <= lastId && count == 0) {
     if (exists(snapshot)) audit("user_snapshot", snapshot, "system");
     ++snapshot;
   }
   doorTick(); outputsTick(); displayTick(); delay(5);
+}
+// Reinício dos leitores após a fechadura (bancada 06/11/2026): o pulso de 2 A da fechadura
+// deixava RC522 e DY50 mudos até reiniciar o Mega. 1 s depois que a saída volta a LOW,
+// e de novo 3 s após isso, refaz a inicialização dos dois. Só roda no loop (nunca dentro
+// do atendimento da porta) e espera a fechadura desenergizada. Bloqueios: PCD_Init ~50-150 ms;
+// handshake do DY50 até ~1 s se não responder, com a porta e a CAM atendidas no stream do
+// DY50 (só o teclado espera). finger.begin não é usado porque tem delay(1000) sem atendimento.
+void readerResetTick() {
+  if (!readerResetStage || lockEnergized) return;
+  const uint32_t due = readerResetStage == 1 ? kReaderResetFirstMs : kReaderResetFirstMs + kReaderResetSecondMs;
+  if (uint32_t(millis() - lockReleasedAt) < due) return;
+  readerResetStage = readerResetStage == 1 ? 2 : 0;
+  linkTick(true);  // como no cardTick: atende a UART da CAM antes do bloqueio na SPI
+  rfidReinit(); lastRfidRecovery = millis();
+  Serial.print(F("RFID reiniciado ")); Serial.println(rfidReady ? F("ok") : F("sem resposta"));
+  linkTick(true);
+  Serial1.begin(57600);  // reabre a UART do DY50 (descarta erro de quadro) antes do handshake
+  fingerprintReady = fingerprintHandshake(); lastFingerRecovery = millis();
+  Serial.print(F("DY50 reiniciado ")); Serial.println(fingerprintReady ? F("ok") : F("sem resposta"));
 }

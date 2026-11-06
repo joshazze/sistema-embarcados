@@ -1,6 +1,6 @@
 """TST-02: testes do sketch Mega com as funções reais recortadas do .ino.
 
-Cobre: debounce de 50 ms da porta (doorTick), cores do LED RGB (outputsTick),
+Cobre: debounce de 200 ms da porta (doorTick), cores do LED RGB (outputsTick),
 textos do LCD com ID (idText/displayTick), teclas D, * e # (handleKey),
 pin_in_use (resetPassword) e sequências reais doorTick+outputsTick com o
 LOCK_MODE de Config.example.h (variantes 1 e 2 só na cópia de teste).
@@ -161,35 +161,35 @@ MAIN_DEBOUNCE = r'''
 int main() {
  fecha(true);  // porta começa fechada (botões em LOW)
  rawClosed = stableClosed = true; rawSince = 0; door.begin(true, 0); resetUi(); noticeDuration = 0;
- // (a) porta "abre" por 49 ms e volta: abaixo de 50 ms, nada muda
- fecha(false); passo(1000); passo(1049);
+ // (a) porta "abre" por 199 ms e volta: abaixo de 200 ms, nada muda
+ fecha(false); passo(1000); passo(1199);
  assert(stableClosed && door.state == DoorState::Idle && audits.empty());
- fecha(true); passo(1049);
+ fecha(true); passo(1199);
  assert(stableClosed && audits.empty());
- passo(1300); assert(stableClosed && door.state == DoorState::Idle && audits.empty());
- // (b) abertura estável: a 49 ms ainda é ignorada; a 50 ms é aceita (porta Idle vira alarme)
- fecha(false); passo(2000); passo(2049);
+ passo(1500); assert(stableClosed && door.state == DoorState::Idle && audits.empty());
+ // (b) abertura estável: a 199 ms ainda é ignorada; a 200 ms é aceita (porta Idle vira alarme)
+ fecha(false); passo(2000); passo(2199);
  assert(stableClosed && audits.empty());
- passo(2050);
+ passo(2200);
  assert(!stableClosed && door.state == DoorState::Alarm);
  assert(audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
- // (c) fechamento estável a 50 ms encerra o alarme
- audits.clear(); fecha(true); passo(3000); passo(3049);
+ // (c) fechamento estável a 200 ms encerra o alarme
+ audits.clear(); fecha(true); passo(3000); passo(3199);
  assert(!stableClosed && door.state == DoorState::Alarm);
- passo(3050);
+ passo(3200);
  assert(stableClosed && door.state == DoorState::Idle);
  assert(audits.size() == 1 && audits[0] == "door_closed|0||");
  // (d) cada borda reinicia a janela: fecha/abre em 30 ms não conta; a janela recomeça em 4040
  audits.clear(); fecha(false); passo(4000); fecha(true); passo(4030); fecha(false); passo(4040);
- passo(4089); assert(stableClosed && audits.empty());
- passo(4090); assert(!stableClosed && audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
- fecha(true); passo(4200); passo(4250); assert(stableClosed && door.state == DoorState::Idle);
+ passo(4239); assert(stableClosed && audits.empty());
+ passo(4240); assert(!stableClosed && audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
+ fecha(true); passo(4300); passo(4500); assert(stableClosed && door.state == DoorState::Idle);
 }
 '''
 
 
 class DebounceTests(unittest.TestCase):
-    def test_debounce_de_50_ms_na_porta(self):
+    def test_debounce_de_200_ms_na_porta(self):
         src = _ler_ino()
         _executar(PREFIXO_HW + _pecas_hw(src) + AJUDANTES_HW + MAIN_DEBOUNCE)
 
@@ -215,12 +215,12 @@ int main() {
  door.authorize(7, 61000); authorizationAt = 61000; accessMethod = "password"; buzzer.reset();
  passo(61000); assert(door.state == DoorState::AwaitOpen && cor() == "010");
  // Aberta autorizada: amarelo piscando (aceso quando (t/600)%2 == 1)
- fecha(false); passo(61100); passo(61150);
- assert(door.state == DoorState::Open && cor() == "110");
+ fecha(false); passo(61100); passo(61300);   // 200 ms de debounce
+ assert(door.state == DoorState::Open);
  passo(61800); assert(cor() == "110");
  passo(62400); assert(cor() == "000");
  // Fechada: encerra o ciclo e volta ao ocioso
- fecha(true); passo(63000); passo(63050);
+ fecha(true); passo(63000); passo(63200);
  assert(door.state == DoorState::Idle && cor() == "000");
  // Aviso não-erro na tela de acesso: não pinta de vermelho
  passo(64000); notice("Cadastrado", "ID 007"); passo(64100); assert(cor() == "000");
@@ -237,13 +237,13 @@ int main() {
  passo(70200); assert(cor() == "101");
  ui = Ui::Access; passo(70300); assert(cor() == "000");
  // Porta aberta sem autorização: alarme pisca vermelho (aceso quando (t/350)%2 == 1)
- fecha(false); passo(71000); passo(71050);
- assert(door.state == DoorState::Alarm && cor() == "100");   // 71050/350 = 203 (ímpar): aceso
+ fecha(false); passo(71000); passo(71200);
+ assert(door.state == DoorState::Alarm && cor() == "100");   // 71200/350 = 203 (ímpar): aceso
  passo(71400); assert(cor() == "000");                         // 204 (par): apagado
  // Alarme tem precedência sobre o erro: na fase apagada, o aviso de erro não acende
  notice("Acesso negado", "Senha incorreta", true); passo(71700); assert(cor() == "000");
  // Fechar encerra o alarme; o aviso de fechamento substitui o de erro
- fecha(true); passo(72000); passo(72050);
+ fecha(true); passo(72000); passo(72200);
  assert(door.state == DoorState::Idle);
  passo(73500); assert(cor() == "000");
  // Falha de armazenamento usa o mesmo aviso de erro: vermelho
@@ -271,42 +271,42 @@ int main() {
  assert(trava() == (MODO == 0 ? 0 : 1));
  passo(1300); assert(trava() == (MODO == 2 ? 1 : 0) && buzzerPin() == 0);
  fecha(false); passo(1400); assert(door.state == DoorState::AwaitOpen);
- passo(1450);
+ passo(1600);
  assert(door.state == DoorState::Open && door.user == 7 && trava() == 0 && buzzerPin() == 0);
  assert(audits.size() == 1 && audits[0] == "door_opened|7|password|");
  passo(3000); assert(cor() == "110");
  fecha(true); passo(5000); assert(door.state == DoorState::Open);
- passo(5050);
+ passo(5200);
  assert(door.state == DoorState::Idle && trava() == 0 && buzzerPin() == 0);
  assert(audits.size() == 2 && audits[1] == "door_closed|7|password|");
  assert(noticeLine1 == "Porta fechada" && noticeLine2 == "ID 007");
- passo(5100); assert(cor() == "000");
+ passo(5300); assert(cor() == "000");
  // 2) forçada -> alarme -> saída do alarme
  audits.clear();
- fecha(false); passo(10000); assert(door.state == DoorState::Idle);
- passo(10050);
+ fecha(false); passo(9850); assert(door.state == DoorState::Idle);
+ passo(10050);   // borda em 9850 + 200 ms de debounce
  assert(door.state == DoorState::Alarm && cor() == "000");
  assert(audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
  passo(10400); assert(cor() == "100" && trava() == 0 && buzzerPin() == 0);
  notice("Acesso negado", "Senha incorreta", true);
  passo(10700); assert(cor() == "000");
  audits.clear(); fecha(true); passo(11000); assert(door.state == DoorState::Alarm);
- passo(11050);
+ passo(11200);
  assert(door.state == DoorState::Idle && audits.size() == 1 && audits[0] == "door_closed|0||");
- passo(11100); assert(cor() == "000");
+ passo(11300); assert(cor() == "000");
  passo(12500); assert(cor() == "000" && trava() == 0 && buzzerPin() == 0);
  // 3) aberta além de 5 minutos: alarme e bipe de 250 ms a cada 2 s até fechar
  audits.clear(); passo(20000);
  door.authorize(7, 20000); authorizationAt = 20000; accessMethod = "password"; buzzer.reset();
- fecha(false); passo(20100); passo(20150);
+ fecha(false); passo(20100); passo(20300);
  assert(door.state == DoorState::Open && audits.back() == "door_opened|7|password|");
- passo(320149); assert(door.state == DoorState::Open && buzzerPin() == 0);
- passo(320150);
+ passo(320299); assert(door.state == DoorState::Open && buzzerPin() == 0);
+ passo(320300);
  assert(door.state == DoorState::Alarm && audits.back() == "door_timeout|7|password|");
  assert(buzzerPin() == 1);
- passo(320400); assert(buzzerPin() == 0);
- passo(322150); assert(buzzerPin() == 1 && door.state == DoorState::Alarm);
- fecha(true); passo(322200); passo(322250);
+ passo(320550); assert(buzzerPin() == 0);
+ passo(322300); assert(buzzerPin() == 1 && door.state == DoorState::Alarm);
+ fecha(true); passo(322400); passo(322600);
  assert(door.state == DoorState::Idle && buzzerPin() == 0 && audits.back() == "door_closed|7|password|");
  // 4) entrada expirada: três bipes de 200 ms e trava sem energia no modo simulado
  audits.clear(); passo(400000);
@@ -341,8 +341,8 @@ int main() {
  rawClosed = stableClosed = true; rawSince = 0; door.begin(true, 0); resetUi(); noticeDuration = 0;
  // (a) porta fechada e ociosa: buzzer em silêncio
  passo(1000); assert(buzzerPin() == 0);
- // (b) porta aberta sem autorização: ForcedOpen em 2050 (debounce de 50 ms)
- fecha(false); passo(2000); passo(2050);
+ // (b) porta aberta sem autorização: ForcedOpen em 2050 (borda em 1850 + debounce de 200 ms)
+ fecha(false); passo(1850); passo(2050);
  assert(door.state == DoorState::Alarm && door.user == 0 && door.since == 2050);
  assert(audits.size() == 1 && audits[0] == "forced_open|0|sensor|");
  passo(2050); assert(buzzerPin() == 1);   // since+0: liga já no evento
@@ -351,7 +351,7 @@ int main() {
  passo(2600); assert(buzzerPin() == 1);   // since+550
  passo(2800); assert(buzzerPin() == 0);   // since+750
  // (c) fechar: encerra o alarme e o buzzer desliga
- audits.clear(); fecha(true); passo(3000); passo(3050);
+ audits.clear(); fecha(true); passo(3000); passo(3200);
  assert(door.state == DoorState::Idle && audits.size() == 1 && audits[0] == "door_closed|0||");
  assert(buzzerPin() == 0);
  passo(3600); assert(buzzerPin() == 0);
@@ -360,20 +360,20 @@ int main() {
  passo(4000); assert(door.state == DoorState::Alarm && door.user == 0 && buzzerPin() == 1);
  passo(4250); assert(buzzerPin() == 0);   // 250 ms desligado
  passo(4500); assert(buzzerPin() == 1);   // novo bipe
- fecha(true); passo(4600); passo(4650);
+ fecha(true); passo(4600); passo(4800);
  assert(door.state == DoorState::Idle && buzzerPin() == 0);
  // (e) OpenTooLong (alarme com usuário 7) mantém o bipe de 250 ms a cada 2 s
  door.authorize(7, 5000); authorizationAt = 5000; accessMethod = "password"; buzzer.reset();
  passo(5000); assert(door.state == DoorState::AwaitOpen);
- fecha(false); passo(5100); passo(5150);
+ fecha(false); passo(5100); passo(5300);
  assert(door.state == DoorState::Open && door.user == 7);
- passo(305150);
+ passo(305300);
  assert(door.state == DoorState::Alarm && door.user == 7 && audits.back() == "door_timeout|7|password|");
- passo(305150); assert(buzzerPin() == 1);   // T+0
- passo(305250); assert(buzzerPin() == 1);   // T+100
- passo(305650); assert(buzzerPin() == 0);   // T+500
- passo(307150); assert(buzzerPin() == 1);   // T+2000: repete a cada 2 s
- fecha(true); passo(307200); passo(307250);
+ passo(305300); assert(buzzerPin() == 1);   // T+0
+ passo(305400); assert(buzzerPin() == 1);   // T+100
+ passo(305800); assert(buzzerPin() == 0);   // T+500
+ passo(307300); assert(buzzerPin() == 1);   // T+2000: repete a cada 2 s
+ fecha(true); passo(307350); passo(307550);
  assert(door.state == DoorState::Idle && buzzerPin() == 0);
 }
 '''
