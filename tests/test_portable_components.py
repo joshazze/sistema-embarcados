@@ -16,7 +16,7 @@ class PortableComponentTests(unittest.TestCase):
 
     def test_components(self):
         sdk = Path('/Library/Developer/CommandLineTools/SDKs/MacOSX26.5.sdk')
-        for name in ('user_store', 'card_store', 'serial_frame', 'boot_counter', 'message_protocol', 'dy50_filter', 'door'):
+        for name in ('user_store', 'card_store', 'serial_frame', 'boot_counter', 'message_protocol', 'dy50_filter', 'door', 'mega_programmer'):
             with self.subTest(component=name), tempfile.TemporaryDirectory() as directory:
                 binary = Path(directory) / name
                 command = [os.environ.get('CXX', 'c++'), '-std=c++11', '-Wall', '-Wextra', '-Werror']

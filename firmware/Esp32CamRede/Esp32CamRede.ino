@@ -12,8 +12,17 @@
 #include "MessageProtocol.h"
 #if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
 #include <ArduinoOTA.h>
+#include <WebServer.h>
+#include <mbedtls/sha256.h>
+#include <mbedtls/md.h>
+#include "MegaProgrammer.h"
 static_assert(sizeof(OTA_PASSWORD) > 8, "OTA_PASSWORD deve ter pelo menos 8 caracteres");
+// A gravação do Mega usa a API do mbedtls 3 (mbedtls_sha256 devolve int), que vem com o core 3.x.
+static_assert(ESP_ARDUINO_VERSION_MAJOR >= 3, "a gravacao do Mega exige o core esp32 3.x (mbedtls 3)");
 #endif
+// Pinos da gravação do Mega (fora dos pinos da câmera AI-Thinker e do link Serial2 em IO13/IO14).
+// IO12: base do BC337 (HIGH = Mega em reset); é pino de strapping e tem 10k ao GND externo.
+constexpr uint8_t kMegaResetPin = 12, kMegaTxPin = 2, kMegaRxPin = 15;
 static_assert(sizeof(DEVICE_ID) <= 33, "DEVICE_ID deve ter no máximo 32 caracteres");
 using namespace MessageProtocol;
 struct Item { EventData event; uint8_t *photo; size_t photoSize; };
@@ -57,6 +66,182 @@ bool startCamera() {
 #endif
   return false;
 }
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
+// Gravação do Mega pela rede: POST http://controle-cam.local:8081/mega (Digest, usuário "admin",
+// senha OTA_PASSWORD), corpo binário da flash e headers X-Image-SHA256 e X-Image-MAC. Porta 8081: o
+// servidor Python usa 8080 no Mac e a ArduinoOTA usa 3232 na CAM.
+// X-Image-MAC = HMAC-SHA256(chave OTA_PASSWORD, sha256 do corpo em hex minúsculo), em hex. O Digest
+// do WebServer não renova o nonce após um acesso aceito nem confere nc, então um pedido capturado
+// poderia ser reenviado com outro corpo; o MAC amarra o pedido ao conteúdo. Sem MAC ou MAC errado:
+// 403 sem gravar. Falha de autenticação (Digest com Authorization presente, ou MAC) espera 1 s.
+// Respostas reconhecíveis (JSON com ok, tentativas, bytes, ms, etapa, motivo):
+//   401 desafio Digest (senha errada ou sem Authorization);
+//   400 etapa "sonda": POST autenticado com corpo vazio; confirma a senha sem gravar nada;
+//   409 OTA da própria CAM em andamento; 403 MAC ausente ou errado; 413 tamanho; 200/502 gravação.
+// Falha final (502): o Mega recebe um pulso de reset e fica com a flash parcial (páginas gravadas
+// até a falha) rodando; recupere regravando, pela CAM ou pela USB.
+// Modelo de tarefas: o WebServer roda numa tarefa própria ("mega-prog", núcleo 1, prioridade 1).
+// A gravação é síncrona dentro dela (~1 min por tentativa, até ~4 min com 3), então networkTask (eventos, heartbeat, OTA),
+// loop() (link Serial2 com o Mega) e o Wi-Fi (núcleo 0) seguem rodando. O watchdog de tarefas
+// vigia a ociosidade do núcleo 0; a tarefa cede CPU a cada espera de byte e a cada página.
+constexpr uint16_t kMegaProgPort = 8081;
+WebServer megaServer(kMegaProgPort);
+volatile bool megaBusy = false;  // gravação em curso; networkTask pausa a ArduinoOTA da CAM enquanto isso
+volatile bool camOtaActive = false;  // OTA da CAM em curso (onStart até onEnd/onError); /mega responde 409
+struct MegaUpload { bool started, authorized; int refuse; const char *why; uint8_t *image; size_t expected, received; char sha[65], mac[65]; } megaUpload = {};
+struct CamMegaPort : MegaProgrammer::Port {
+  void write(const uint8_t *data, size_t size) override { Serial1.write(data, size); }
+  int read(uint32_t timeoutMs) override {
+    uint32_t t = millis();
+    for (;;) {
+      int c = Serial1.read();
+      if (c >= 0) return c;
+      if (uint32_t(millis() - t) >= timeoutMs) return -1;
+      vTaskDelay(1);
+    }
+  }
+  void flushInput() override { while (Serial1.read() >= 0) {} }
+  uint32_t millis() override { return ::millis(); }
+  void delayMs(uint32_t ms) override { vTaskDelay(pdMS_TO_TICKS(ms ? ms : 1)); }
+  void setReset(bool active) override { digitalWrite(kMegaResetPin, active ? HIGH : LOW); }
+  void attemptFailed(uint8_t attempt, MegaProgrammer::Stage stage, const char *reason, uint32_t address) override {
+    Serial.printf("MEGA prog: tentativa %u falhou em %s (%s) endereco 0x%05lx\n", (unsigned)attempt,
+                  MegaProgrammer::stageName(stage), reason, (unsigned long)address);
+  }
+  void pageDone(uint32_t done) override { if ((done & 0x3FFF) == 0) Serial.printf("MEGA prog: %lu bytes\n", (unsigned long)done); vTaskDelay(1); }
+};
+void megaReleaseUpload() {
+  free(megaUpload.image);
+  megaUpload = {};
+  megaBusy = false;
+}
+// Só Digest: o authenticate(usuário, senha) do WebServer aceitaria também Basic (senha em claro).
+bool megaAuthorized() {
+  return megaServer.authenticate([](HTTPAuthMethod mode, String user, String *) -> String * {
+    return mode == DIGEST_AUTH && user.equalsConstantTime("admin") ? new String(OTA_PASSWORD) : nullptr;
+  });
+}
+bool megaHex64(const String &s) {
+  if (s.length() != 64) return false;
+  for (char c : s) if (!isxdigit((unsigned char)c)) return false;
+  return true;
+}
+// HMAC-SHA256(OTA_PASSWORD, shaHex) em hex minúsculo; false se o mbedtls falhar.
+bool megaExpectedMac(const char *shaHex, char out[65]) {
+  const mbedtls_md_info_t *md = mbedtls_md_info_from_type(MBEDTLS_MD_SHA256);
+  uint8_t mac[32];
+  if (!md || mbedtls_md_hmac(md, reinterpret_cast<const uint8_t *>(OTA_PASSWORD), sizeof(OTA_PASSWORD) - 1,
+                             reinterpret_cast<const uint8_t *>(shaHex), 64, mac) != 0) return false;
+  for (uint8_t i = 0; i < 32; ++i) snprintf(out + 2 * i, 3, "%02x", mac[i]);
+  return true;
+}
+// Recebe o corpo em blocos (antes do handler); confere senha, tamanho e header logo no início.
+void megaRaw() {
+  String type = megaServer.header("Content-Type");
+  if (type.startsWith("multipart/")) return;  // upload de formulário não passa por aqui
+  HTTPRaw &raw = megaServer.raw();
+  if (raw.status == RAW_START) {
+    // O WebServer atende um cliente por vez nesta tarefa: um segundo POST espera na fila TCP e
+    // só começa depois da resposta do primeiro, então nunca há duas gravações ao mesmo tempo.
+    // Sobra de um pedido anterior que não chegou ao handler é liberada aqui.
+    if (megaUpload.image) megaReleaseUpload();
+    megaUpload = {}; megaUpload.started = true;
+    megaUpload.authorized = megaAuthorized();
+    if (!megaUpload.authorized) return;
+    int length = megaServer.clientContentLength();
+    String sha = megaServer.header("X-Image-SHA256"), mac = megaServer.header("X-Image-MAC");
+    if (camOtaActive) { megaUpload.refuse = 409; megaUpload.why = "OTA da CAM em andamento"; return; }
+    // Sonda do script: senha conferida, corpo vazio; nada é alocado nem gravado.
+    if (length == 0) { megaUpload.refuse = 400; megaUpload.why = "senha ok; corpo vazio"; return; }
+    if (length < 0 || uint32_t(length) > MegaProgrammer::kMaxImage) { megaUpload.refuse = 413; megaUpload.why = "tamanho invalido"; return; }
+    if (!megaHex64(sha)) { megaUpload.refuse = 400; megaUpload.why = "X-Image-SHA256 ausente ou invalido"; return; }
+    if (!megaHex64(mac)) { megaUpload.refuse = 403; megaUpload.why = "X-Image-MAC ausente ou invalido"; return; }
+    if (!psramFound()) { megaUpload.refuse = 503; megaUpload.why = "sem PSRAM"; return; }
+    megaUpload.image = static_cast<uint8_t *>(ps_malloc(length));
+    if (!megaUpload.image) { megaUpload.refuse = 503; megaUpload.why = "sem memoria"; return; }
+    megaUpload.expected = length;
+    sha.toLowerCase(); memcpy(megaUpload.sha, sha.c_str(), 65);
+    mac.toLowerCase(); memcpy(megaUpload.mac, mac.c_str(), 65);
+    Serial.printf("MEGA prog: recebendo %d bytes\n", length);
+  } else if (raw.status == RAW_WRITE) {
+    if (megaUpload.image && megaUpload.received + raw.currentSize <= megaUpload.expected) {
+      memcpy(megaUpload.image + megaUpload.received, raw.buf, raw.currentSize);
+      megaUpload.received += raw.currentSize;
+    }
+  } else if (raw.status == RAW_ABORTED) {
+    Serial.println("MEGA prog: envio interrompido");
+    if (megaUpload.image) megaReleaseUpload(); else megaUpload = {};
+  }
+}
+void megaReply(int code, bool ok, uint8_t attempts, uint32_t bytes, uint32_t ms, const char *stage, const char *reason) {
+  JsonDocument doc; doc["ok"]=ok; doc["tentativas"]=attempts; doc["bytes"]=bytes; doc["ms"]=ms; doc["etapa"]=stage; doc["motivo"]=reason;
+  String body; serializeJson(doc, body);
+  megaServer.send(code, "application/json", body);
+  Serial.printf("MEGA prog: HTTP %d %s\n", code, body.c_str());
+}
+void megaHandle() {
+  if (!megaUpload.started) { megaReply(400, false, 0, 0, 0, "recebimento", "corpo binario esperado"); return; }
+  if (!megaUpload.authorized) {
+    megaUpload = {};
+    // Sem Authorization é só o pedido do desafio; com ele, é senha errada: atrasa tentativas em série.
+    if (megaServer.hasHeader("Authorization")) vTaskDelay(pdMS_TO_TICKS(1000));
+    megaServer.requestAuthentication(DIGEST_AUTH, "controle-cam");
+    return;
+  }
+  if (megaUpload.refuse) {
+    int code = megaUpload.refuse; const char *why = megaUpload.why; megaReleaseUpload();
+    if (code == 403) vTaskDelay(pdMS_TO_TICKS(1000));
+    megaReply(code, false, 0, 0, 0, code == 400 && megaServer.clientContentLength() == 0 ? "sonda" : "recebimento", why);
+    return;
+  }
+  uint32_t size = megaUpload.expected;
+  if (megaUpload.received != size) { megaReleaseUpload(); megaReply(400, false, 0, size, 0, "recebimento", "corpo incompleto"); return; }
+  uint8_t digest[32]; char hex[65];
+  if (mbedtls_sha256(megaUpload.image, size, digest, 0) != 0) { megaReleaseUpload(); megaReply(500, false, 0, size, 0, "recebimento", "falha no sha256"); return; }
+  for (uint8_t i = 0; i < 32; ++i) snprintf(hex + 2 * i, 3, "%02x", digest[i]);
+  if (memcmp(hex, megaUpload.sha, 64) != 0) { megaReleaseUpload(); megaReply(400, false, 0, size, 0, "recebimento", "sha256 diferente"); return; }
+  // MAC sobre o sha calculado aqui (igual ao do header após a conferência acima), em tempo constante.
+  char expectedMac[65];
+  if (!megaExpectedMac(hex, expectedMac)) { megaReleaseUpload(); megaReply(500, false, 0, size, 0, "recebimento", "falha no hmac"); return; }
+  if (!MegaProgrammer::constantTimeEqual(expectedMac, megaUpload.mac, 64)) {
+    megaReleaseUpload(); vTaskDelay(pdMS_TO_TICKS(1000));
+    megaReply(403, false, 0, size, 0, "recebimento", "X-Image-MAC errado"); return;
+  }
+  // megaBusy antes de olhar a OTA: a networkTask para de chamar ArduinoOTA.handle() a partir daqui.
+  megaBusy = true;
+  if (camOtaActive) { megaReleaseUpload(); megaReply(409, false, 0, size, 0, "recebimento", "OTA da CAM em andamento"); return; }
+  Serial.printf("MEGA prog: imagem %lu bytes, sha256 e mac ok; gravando\n", (unsigned long)size);
+  // UART1 só durante a gravação: fora dela IO2 fica em entrada para não disputar com a USB do Mega.
+  Serial1.setRxBufferSize(1024);
+  Serial1.begin(115200, SERIAL_8N1, kMegaRxPin, kMegaTxPin);
+  uint32_t started = millis();
+  static CamMegaPort port;
+  static MegaProgrammer::Programmer programmer(port);
+  MegaProgrammer::Result r = programmer.program(megaUpload.image, size);
+  uint32_t elapsed = millis() - started;
+  Serial1.end();
+  pinMode(kMegaTxPin, INPUT); pinMode(kMegaRxPin, INPUT);
+  digitalWrite(kMegaResetPin, LOW);
+  megaReleaseUpload();
+  // 502: o Mega já levou o pulso de reset e roda a flash parcial; só regravar recupera.
+  megaReply(r.ok ? 200 : 502, r.ok, r.attempts, r.bytes, elapsed, MegaProgrammer::stageName(r.stage), r.reason);
+  static bool stackLogged = false;
+  if (!stackLogged) {
+    stackLogged = true;
+    Serial.printf("MEGA prog: pilha livre minima %u bytes\n", (unsigned)uxTaskGetStackHighWaterMark(nullptr));
+  }
+}
+void megaServerTask(void *) {
+  // Espera o Wi-Fi da networkTask antes de abrir a porta.
+  while (WiFi.status() != WL_CONNECTED) vTaskDelay(pdMS_TO_TICKS(500));
+  const char *headers[] = {"X-Image-SHA256", "X-Image-MAC", "Content-Type"};
+  megaServer.collectHeaders(headers, 3);
+  megaServer.on("/mega", HTTP_POST, megaHandle, megaRaw);
+  megaServer.begin();
+  Serial.printf("CAM gravacao do Mega pronta na porta %u\n", (unsigned)kMegaProgPort);
+  for (;;) { megaServer.handleClient(); vTaskDelay(pdMS_TO_TICKS(2)); }
+}
+#endif
 // Uma foto permanece privada e sem associação até prova do Mega. Apenas um
 // evento fica em trânsito, pois o Mega mantém a cabeça da fila até o ACK.
 struct PendingPhoto { bool active; Item item; uint8_t challenge[26]; uint32_t started; } pendingPhoto = {};
@@ -193,12 +378,12 @@ void networkTask(void *) {
     if (wifiUp && !otaStarted) {
       otaStarted=true;
       ArduinoOTA.setHostname("controle-cam"); ArduinoOTA.setPassword(OTA_PASSWORD);
-      ArduinoOTA.onStart([]() { Serial.println("CAM ota inicio"); });
-      ArduinoOTA.onEnd([]() { Serial.println("CAM ota fim"); });
-      ArduinoOTA.onError([](ota_error_t e) { Serial.printf("CAM ota erro %u\n", (unsigned)e); });
+      ArduinoOTA.onStart([]() { camOtaActive = true; Serial.println("CAM ota inicio"); });
+      ArduinoOTA.onEnd([]() { camOtaActive = false; Serial.println("CAM ota fim"); });
+      ArduinoOTA.onError([](ota_error_t e) { camOtaActive = false; Serial.printf("CAM ota erro %u\n", (unsigned)e); });
       ArduinoOTA.begin(); Serial.println("CAM ota pronta controle-cam");
     }
-    if (otaStarted && wifiUp) ArduinoOTA.handle();
+    if (otaStarted && wifiUp && !megaBusy) ArduinoOTA.handle(); // sem OTA da CAM no meio da gravação do Mega
 #endif
     if (!wifiUp) {
       if (uxQueueMessagesWaiting(events) && (!reportedFailure || uint32_t(millis()-lastDiagnostic)>=10000)) {
@@ -292,6 +477,9 @@ void networkTask(void *) {
   }
 }
 void setup() {
+  // IO12 é strapping e segura o Mega em reset se ficar HIGH: força LOW antes de tudo.
+  pinMode(kMegaResetPin, OUTPUT); digitalWrite(kMegaResetPin, LOW);
+  pinMode(kMegaTxPin, INPUT); pinMode(kMegaRxPin, INPUT);  // UART1 só durante a gravação
   Serial.begin(115200); Serial2.setRxBufferSize(1024); Serial2.begin(38400,SERIAL_8N1,13,14);
   initCamBootId();
   events=xQueueCreate(8,sizeof(Item)); commands=xQueueCreate(1,sizeof(Command)); results=xQueueCreate(1,sizeof(Result));
@@ -302,6 +490,9 @@ void setup() {
 #endif
   networkReady = xTaskCreate(networkTask,"rede",10000,nullptr,1,nullptr) == pdPASS;
   if (!networkReady) Serial.println("Falha tarefa de rede");
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
+  if (xTaskCreatePinnedToCore(megaServerTask,"mega-prog",10240,nullptr,1,nullptr,1) != pdPASS) Serial.println("Falha tarefa de gravacao do Mega");
+#endif
 }
 void loop() {
   if (!events || !commands || !results) { delay(100); return; }
