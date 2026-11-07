@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Instala servidor + Caddy numa VM Ubuntu 24.04 limpa. Rodar na VM, como root:
 #   sudo DOMINIO=controle-acesso.duckdns.org PAINEL_USUARIO=admin bash deploy/instalar.sh
-# Pede a senha do painel (camada do Caddy) e gera ADMIN_PIN e DEVICE_KEY se ainda não existirem.
+# Pede a senha do painel (camada do Caddy; ou PAINEL_SENHA no ambiente) e gera ADMIN_PIN e DEVICE_KEY se ainda não existirem.
 # Pode ser rodado de novo para atualizar o código: preserva /etc/controle-acesso.env e o banco.
 set -euo pipefail
 : "${DOMINIO:?defina DOMINIO (ex.: controle-acesso.duckdns.org)}"
@@ -40,8 +40,12 @@ systemctl enable --now controle-acesso
 systemctl restart controle-acesso
 
 if [ ! -f /etc/caddy/painel.hash ]; then
-  echo ">> Senha do painel para o usuário '$PAINEL_USUARIO' (pedida pelo navegador antes do PIN):"
-  caddy hash-password > /etc/caddy/painel.hash
+  if [ -n "${PAINEL_SENHA:-}" ]; then
+    caddy hash-password --plaintext "$PAINEL_SENHA" > /etc/caddy/painel.hash
+  else
+    echo ">> Senha do painel para o usuário '$PAINEL_USUARIO' (pedida pelo navegador antes do PIN):"
+    caddy hash-password > /etc/caddy/painel.hash
+  fi
   chmod 0640 /etc/caddy/painel.hash; chown root:caddy /etc/caddy/painel.hash
 fi
 HASH=$(cat /etc/caddy/painel.hash)
