@@ -1,4 +1,4 @@
-# Handoff: controle de acesso ESP32 (estado em 06/11/2026; sessão 9 em 06/11/2026: teclado novo, RC522, ID+senha, gravação do Mega pela CAM; sessão 8 em 06/11/2026: rede da casa, IP fixo e primeira OTA; sessão 7 em 05/11/2026: rede nova e diagramas; sessão 6 em 04/11/2026; sessão 5 em 03/11/2026; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
+# Handoff: controle de acesso ESP32 (estado em 06/11/2026; sessão 9 em 06/11/2026: teclado novo, RC522, ID+senha, gravação do Mega pela CAM, diodo da fechadura e correções após o pulso; sessão 8 em 06/11/2026: rede da casa, IP fixo e primeira OTA; sessão 7 em 05/11/2026: rede nova e diagramas; sessão 6 em 04/11/2026; sessão 5 em 03/11/2026; sessões 4 e continuação em 02/11/2026, bancada; continuação da tarde de 03/11/2026 na seção 4)
 
 Estado atual único. Substitui os handoffs anteriores. Use este arquivo como
 ponto de partida; `docs/HANDOFF-REVISAO-OPUS.md` é histórico da revisão.
@@ -55,7 +55,8 @@ A versão ESP32 DevKit foi removida em 30/10/2026; é recuperável pelo commit
 - 03/11/2026: as mudanças da sessão 5 (LCD em 4 bits, SHOW_TYPED_DIGITS, bipe da porta forçada, testes, Wokwi e docs) foram commitadas em `e6a9263` e enviadas para origin/main a pedido do dono.
 - 03/11/2026 (tarde): alterados `firmware/Esp32CamRede/Esp32CamRede.ino` (`WiFi.setSleep(false);` logo após `WiFi.mode(WIFI_STA)` em networkTask()) e `tests/test_camera_network.py` (`setSleep` no mock), commitado no commit da tarde de 03/11 (ver git log).
 - 04/11/2026 (sessão 6): alterados `firmware/MegaControlador/MegaControlador.ino`, `firmware/Esp32CamRede/Esp32CamRede.ino`, `firmware/Esp32CamRede/Config.example.h`, `servidor/server.py`, testes (`tests/test_server.py`, `tests/test_camera_network.py`, `tests/test_cam_ota.py` novo) e docs (`HANDOFF.md`, `VALIDACAO.md`, `TESTES.md`, `MONTAGEM.md`). Commit desta sessão: ver git log (feito pelo orquestrador, a pedido do dono).
-- 06/11/2026 (sessão 9): commits `160534d` (RC522 como terceiro método de acesso, login por ID + senha e bloqueio do teclado) e `9d3bed2` (gravação do Mega pela ESP32-CAM, STK500v2 pela rede, com `scripts/gravar-mega-pela-cam.py`). Textos novos do LCD e piscada azul do LED em 10 s: mudança em andamento em `firmware/MegaControlador/MegaControlador.ino` por outro agente, não commitada quando este registro foi escrito (git status: `.ino` do Mega e testes `test_login_id_senha.py`, `test_mega_display.py` e `test_mega_tst02.py` modificados pelo outro agente). Docs da sessão 9 (`HANDOFF.md`, `VALIDACAO.md`) não commitados. O zip `handoff-bancada-2026-11-06` (bancada do amigo do dono) não é versionado.
+- 06/11/2026 (sessão 9): commits `160534d` (RC522 como terceiro método de acesso, login por ID + senha e bloqueio do teclado) e `9d3bed2` (gravação do Mega pela ESP32-CAM, STK500v2 pela rede, com `scripts/gravar-mega-pela-cam.py`). Textos novos do LCD e piscada azul do LED em 10 s: mudança em andamento em `firmware/MegaControlador/MegaControlador.ino` por outro agente, não commitada quando este registro foi escrito (git status: `.ino` do Mega e testes `test_login_id_senha.py`, `test_mega_display.py` e `test_mega_tst02.py` modificados pelo outro agente). Docs da sessão 9 (`HANDOFF.md`, `VALIDACAO.md`) não commitados. (Superado na noite de 06/11: ver item seguinte.) O zip `handoff-bancada-2026-11-06` (bancada do amigo do dono) não é versionado.
+- 06/11/2026 (sessão 9, noite): `bf608b8` (textos do LCD, LED de repouso a cada 10 s e handoff), `99fcc71` (reinício do RC522 e do DY50 após o pulso da fechadura; debounce de 200 ms nos sensores de porta) e `b50bd0b` (telas do ID, mapa de cores do LED, menu 5 e evento `card_unlinked`). Gravados no Mega: até `bf608b8`. `99fcc71` e `b50bd0b` NÃO gravados no Mega nem na CAM. Docs do fim da sessão 9 em commit próprio (ver git log).
 
 ## 4. O que foi feito em 30/10/2026
 
@@ -534,13 +535,49 @@ Bancada com o dono, mais implementação por agentes (Opus implementou a gravaç
 - CAM no 5 V da MB102; divisor do link 3 x 330 Ω / 6 x 330 Ω; ACS712 opcional não instalado.
 - Buzzer com polaridade invertida (correção indicada; não verificada). Serigrafia TX1/RX1 trocada no Mega.
 
-**Fechadura (em andamento)**
+**Fechadura (em andamento; superado pela continuação abaixo: 1N4007 instalado)**
 - Abriu com LOCK_MODE=1 (relato do dono), MAS o Mega reinicia quando a fechadura solta (relato do dono). Causa provável: falta do diodo 1N4007 (pico da bobina no GND/12 V, que também alimenta o Mega pelo VIN) (inferência). Diagrama: `~/Desktop/Sistemas embarcados/diodo-fechadura.svg` (faixa no + da fechadura).
 
-**LED e LCD (em andamento, outro agente; não commitado)**
+**LED e LCD (em andamento, outro agente; não commitado; superado: commitado em `bf608b8` e gravado, ver continuação abaixo)**
 - Piscada azul de repouso de 60 s para 10 s. Textos do LCD: repouso "Controle acesso" / "ID cartao dedo"; digitando "#confirma *limpa"; senha "ID 00X: ******". Não verificado.
 
 **Segurança**: a senha do Wi-Fi, a senha admin do roteador e a OTA_PASSWORD apareceram no chat desta sessão. Trocar OTA_PASSWORD, DEVICE_KEY e ADMIN_PIN (ADMIN_PIN e DEVICE_KEY já estavam pendentes).
+
+### Sessão 9, continuação (06/11/2026, ~20:00 a 21:30): diodo da fechadura, acessos e correções após o pulso
+
+Bancada com o dono. Níveis em docs/VALIDACAO.md (registros de 06/11/2026, noite). Nenhuma senha registrada; o agente não abriu `Config.h` nem `.env`.
+
+**Diodo 1N4007 na fechadura**
+- 1a montagem: o Mega ficou em "Iniciando..." e reiniciando em ciclo; o diodo estava invertido em relação ao fio que vai ao NA (a cor do fio da fechadura não indica polaridade) (relato do dono).
+- Corrigido: FAIXA no fio da fechadura ligado ao NA do relé; o outro lado no fio que vai ao − da fonte 12 V. O Mega passou a iniciar e a fechadura funciona sem reiniciar o Mega (relato do dono). Isso supera o desenho anterior "faixa no + da fechadura" descrito no bloco da sessão 9.
+- Lição: o ciclo indica que o relé chega a fechar no boot apesar do 10 kΩ de D35 ao GND; investigar (não verificado).
+- Esquemas do amigo `passo11_fechadura.png` e `esquema_geral.png` copiados para `~/Desktop/Sistemas embarcados/` (fora do repositório); diagrama `~/Desktop/Sistemas embarcados/diodo-fechadura.svg`.
+
+**Gravações do Mega pela CAM**
+- 2a e 3a gravações de firmware: HTTP 200, 1 tentativa; 43688 B e depois 43818 B (11331 ms), com os textos "Controle acesso" / "ID cartao dedo" (verificado em hardware; LCD por relato do dono).
+- Gravação feita com a alavanca dos 12 V LIGADA, por decisão do dono (sem incidente relatado).
+- A primeira tentativa às vezes dá "Connection reset by peer" (Wi-Fi da CAM); reiniciar a CAM antes resolve.
+
+**Servidor**
+- O servidor antigo (iniciado às 15:47, antes da mudança de `server.py` às 17:53) rejeitava eventos novos: painel "Descartados após rejeição definitiva: 4". O contador é acumulado e não zera sozinho; zerar rejected/rejected_prev em devices (com backup) fica para decisão do dono.
+- Servidor reiniciado às 20:30:24 pelo agente (kill do processo e atalho rodar-servidor-controle.command) (verificado em host). Regra: reiniciar o servidor sempre que `server.py` mudar.
+
+**LED**: tinha parado (fio frouxo provável) e voltou (relato do dono).
+
+**Ensaios com o firmware novo (20:28 a 20:37; relato do dono + eventos do servidor)**
+- Acesso por senha (ID+senha), por cartão e por digital liberados; fechadura pulsando.
+- PROBLEMA: depois de um acesso (pulso da fechadura), o RC522 e o DY50 deixam de ler (nenhum evento) até reiniciar o Mega.
+- Sensores de porta (jumpers fixos no GND) geraram door_opened/door_closed/forced_open em ~1 s logo após acessos (ruído do pulso; inferência).
+- Correção em firmware, commit `99fcc71` (análise de código; NÃO gravado no Mega): reinício automático do RC522 e do DY50 1 s e 4 s após a fechadura desenergizar; debounce dos sensores de porta de 50 para 200 ms. Sugestão de hardware pendente: pull-up externo 4,7 kΩ + capacitor 100 nF em D30 e D31.
+
+**Commit `b50bd0b` (NÃO gravado no Mega nem na CAM; análise de código)**
+- LCD "#Confirma *Limpa" nas telas de ID e senha; "ID: 12" ao digitar o ID.
+- Menu admin em 2 telas: "1 Novo 2 Inativ." / "3 Reativ. D Sair" e "4 Vincula cartao" / "5 Remove cartao".
+- Menu 5 desvincula cartão com confirmação "Remover cartao?" / "#Sim *Nao" e evento novo `card_unlinked` (Mega, os 3 `MessageProtocol.h`, CAM, servidor e painel "Cartão desvinculado").
+- Mapa de cores do LED aprovado pelo dono: alarme vermelho piscando rápido; teclado travado vermelho piscando a cada 1 s; erro vermelho fixo; flash ciano de 150 ms ao ler cartão/digital; menus e cadastro branco; senha magenta; digitando o ID ciano; porta aberta amarelo piscando; liberado verde; repouso azul por 200 ms a cada 10 s.
+- Suíte: 214 testes, 1 falha pré-existente (`test_server.test_deeply_nested_json_reports_400`) (verificado em host). Mega compila com 44852 B / RAM 4771 B; CAM compila com 1156112 B (compilado).
+
+**Ao parar**: o Mac saiu da rede MARCILIO&PATY (foi para outra rede 10.0.0.x, longe da bancada). A pasta `/tmp/camb` sumiu: recompilar antes da OTA.
 
 ## 5. Verificação (30/10/2026, 02/11/2026, 03/11/2026, 04/11/2026 e 06/11/2026, sessões 8 e 9)
 
@@ -873,7 +910,18 @@ Pendente:
 
 ## 9. Próximo passo exato
 
-Próximo passo exato (06/11/2026, noite; sessão 9), em ordem:
+Próximo passo exato (06/11/2026, fim da sessão 9), em ordem:
+Estado: Mega com o firmware de `bf608b8` gravado pela CAM (LOCK_MODE=1; 1N4007 instalado; fechadura sem reiniciar o Mega); `99fcc71` e `b50bd0b` commitados, NÃO gravados no Mega nem na CAM; CAM em 192.168.1.162; servidor reiniciado às 20:30:24 (antes de `b50bd0b`); Mac fora da MARCILIO&PATY; `/tmp/camb` apagada.
+  (1) Mac na MARCILIO&PATY (IP fixo 192.168.1.50); conferir a CAM: `ping 192.168.1.162` e o painel.
+  (2) Recompilar a CAM: `"/Applications/Arduino IDE.app/Contents/Resources/app/lib/backend/resources/arduino-cli" compile --fqbn esp32:esp32:esp32cam:PartitionScheme=min_spiffs --build-path /tmp/camb firmware/Esp32CamRede`; OTA no Terminal do dono (reiniciar a CAM antes; repetir se der timeout ou broken pipe): `read -s "OTA?Senha OTA: " && echo && python3 ~/Library/Arduino15/packages/esp32/hardware/esp32/3.3.12/tools/espota.py -i 192.168.1.162 -p 3232 -a "$OTA" -f /tmp/camb/Esp32CamRede.ino.bin -r; unset OTA`; depois `rm -rf /tmp/camb`. Conferir a rota: `curl -X POST http://192.168.1.162:8081/mega` -> 401.
+  (3) Gravar o Mega pela CAM (alavanca dos 12 V desligada; reiniciar a CAM antes): `cd ~/Desktop/"Sistemas embarcados"/controle-acesso-esp32 && python3 -I scripts/gravar-mega-pela-cam.py --compilar --host 192.168.1.162`; esperado ok:true e LCD "Controle acesso".
+  (4) Reiniciar o servidor (Ctrl+C e atalho rodar-servidor-controle.command), porque `server.py` mudou (`card_unlinked`).
+  (5) Ensaios: 16 teclas; ID+senha certa e errada; bloqueio na 5a falha (LED vermelho piscando devagar, "Teclado travado"); cartão desconhecido; menu 4 vincular; acesso por cartão; menu 5 remover; digital; depois de cada acesso, cartão e digital devem voltar a ler sem reiniciar o Mega (valida o reinício automático); nenhum forced_open falso; cores do LED pelo mapa; painel sem novos descartes.
+  (6) Investigar por que o relé fecha no boot (medir D35 durante o reset; conferir o 10 kΩ no sinal do relé); hardware opcional: 4,7 kΩ + 100 nF em D30/D31.
+  (7) Decidir o LOCK_MODE final (`docs/MONTAGEM.md`, seção 6); trocar OTA_PASSWORD, DEVICE_KEY e ADMIN_PIN (valores nunca no chat); atualizar README, MONTAGEM, MATERIAIS e TESTES; Wi-Fi e alimentação da CAM; corrigir a falha pré-existente do teste do servidor.
+  (8) A skill `/sistema-embarcado` aponta para o caminho antigo `~/Desktop/controle-acesso-esp32`; o repositório está em `~/Desktop/Sistemas embarcados/controle-acesso-esp32` (o dono decide corrigir).
+
+Próximo passo exato (06/11/2026, noite; sessão 9; superado pelo bloco do fim da sessão 9 acima: itens 1 e 2 concluídos; mantido como histórico), em ordem:
 Estado: Mega gravado pela CAM com o firmware de `160534d` e LOCK_MODE=1 (fechadura abre, mas o Mega reinicia quando ela solta); CAM em 192.168.1.162 com a rota `/mega` (porta 8081); Wi-Fi da CAM instável; textos do LCD e piscada do LED em andamento (outro agente, não commitados).
   (1) Instalar o 1N4007 na fechadura com os 12 V desligados, faixa no + da fechadura (`~/Desktop/Sistemas embarcados/diodo-fechadura.svg`), e confirmar que o Mega não reinicia quando a fechadura solta. Se reiniciar, separar a alimentação do Mega ou pôr capacitor no VIN.
   (2) Commitar os textos do LCD e do LED se ainda não estiverem commitados e regravar o Mega pela CAM (12 V desligados durante a gravação): `python3 -I scripts/gravar-mega-pela-cam.py --compilar --host 192.168.1.162` (reiniciar a CAM antes se o Wi-Fi estiver lento).
