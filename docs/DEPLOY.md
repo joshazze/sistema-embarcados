@@ -64,4 +64,5 @@ sudo sqlite3 /var/lib/controle-acesso/historico.sqlite3 .dump | gzip > backup.sq
 
 - O servidor continua de **um aparelho só** (`DEVICE_ID`) e com SQLite local; isto é hospedagem do protótipo, não a integração com o sistema do hospital.
 - A UART entre Mega e CAM continua sem autenticação, como na LAN.
+- Cadeia conferida em 07/11/2026 na VM real: folha → `YE2` → `Root YE` → `ISRG Root X2` → `ISRG Root X1`, e `openssl s_client -CAfile` só com X1+X2 (o conteúdo de `ServerCA.h`) devolve `Verify return code: 0`. São 4 certificados na cadeia; se a CAM falhar no handshake por memória, esse é o primeiro suspeito.
 - Validado em 07/11/2026 com Caddy local (`tls internal`): CAM sem senha do painel = 200, painel sem senha = 401, senha sem PIN = 401, senha + PIN = 200. **Ainda não validado com a CAM real em HTTPS**; o handshake TLS com câmera ligada depende de heap e deve ser conferido no monitor serial.
