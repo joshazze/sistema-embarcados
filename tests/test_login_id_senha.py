@@ -235,18 +235,18 @@ int main() {
  cadastra(1, "123456", true);
  novaPorta();
  // ADMIN_PIN = 0000000000: prefixos de 1 a 3 digitos viram '*' no LCD
- dg("0"); tela("#confirma *limpa", "*");
- dg("0"); tela("#confirma *limpa", "**");
- dg("0"); tela("#confirma *limpa", "***");
+ dg("0"); tela("#Confirma *Limpa", "ID: *");
+ dg("0"); tela("#Confirma *Limpa", "ID: **");
+ dg("0"); tela("#Confirma *Limpa", "ID: ***");
  // 4 digitos já são mascarados por tamanho
- dg("0"); tela("#confirma *limpa", "****");
+ dg("0"); tela("#Confirma *Limpa", "ID: ****");
  // ID comum (não é prefixo do admin) continua visível
- novaPorta(); dg("1"); tela("#confirma *limpa", "1");
- dg("2"); tela("#confirma *limpa", "12");
- assert(Serial.log.find("LCD| #confirma *limpa | 12\n") != std::string::npos);
+ novaPorta(); dg("1"); tela("#Confirma *Limpa", "ID: 1");
+ dg("2"); tela("#Confirma *Limpa", "ID: 12");
+ assert(Serial.log.find("LCD| #Confirma *Limpa | ID: 12\n") != std::string::npos);
  // espelho serial: o prefixo do admin nunca aparece como dígito
- assert(Serial.log.find("LCD| #confirma *limpa | ***\n") != std::string::npos);
- assert(Serial.log.find("| 0\n") == std::string::npos && Serial.log.find("| 00\n") == std::string::npos);
+ assert(Serial.log.find("LCD| #Confirma *Limpa | ID: ***\n") != std::string::npos);
+ assert(Serial.log.find("| ID: 0\n") == std::string::npos && Serial.log.find("| ID: 00\n") == std::string::npos);
  return 0;
 }
 ''')
@@ -326,7 +326,7 @@ class TextosLcdTests(unittest.TestCase):
         self.assertTrue(len(linhas) >= 30, len(linhas))
         longos = [t for t in linhas if len(t) > 16]
         self.assertEqual(longos, [])
-        for esperado in ('Teclado travado', 'Controle acesso', 'ID cartao dedo', 'ID ou cartao', '#confirma *limpa', 'Entrada invalida', 'ID e # ou admin', 'Use 6 digitos'):
+        for esperado in ('Teclado travado', 'Controle acesso', 'ID cartao dedo', 'ID ou cartao', '#Confirma *Limpa', 'Entrada invalida', 'ID e # ou admin', 'Use 6 digitos'):
             self.assertIn(esperado, linhas)
         self.assertIn('"Aguarde %lu s"', corpo)
         self.assertIn('idText(pendingId) + ": "', corpo)

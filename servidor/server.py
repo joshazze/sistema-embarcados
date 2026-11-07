@@ -23,6 +23,7 @@ EVENT_TYPES = {
     "user_disabled", "user_enabled", "password_reset", "admin_login",
     "access_granted", "access_denied", "door_opened", "door_closed",
     "entry_expired", "door_timeout", "forced_open", "enroll_failed", "card_linked", "keypad_locked",
+    "card_unlinked",
 }
 METHODS = {"", "password", "fingerprint", "admin", "keypad", "system", "sensor", "usb", "web", "card"}
 # Contadores do heartbeat. Ausentes contam como 0 (firmware antigo).
@@ -432,7 +433,7 @@ class Handler(BaseHTTPRequestHandler):
                 and isinstance(event_type, str) and event_type in EVENT_TYPES
                 and isinstance(method, str) and method in METHODS
                 and integer(data.get("user_id"), 0, 100)
-                and (event_type != "card_linked" or data.get("user_id"))
+                and (event_type not in {"card_linked", "card_unlinked"} or data.get("user_id"))
                 and text(data.get("reason"), 40) and type(data.get("active")) is bool
                 and integer(data.get("uptime_ms"), 0, 4294967295)
                 and (epoch is None or integer(epoch, 1700000000, 4102444800))):
@@ -450,8 +451,8 @@ class Handler(BaseHTTPRequestHandler):
             elif data["user_id"] and event_type in {"user_enrolled", "user_snapshot", "user_disabled", "user_enabled"}:
                 db.execute("INSERT INTO users VALUES(?,?,?,?) ON CONFLICT(device,user_id) DO UPDATE SET active=excluded.active, updated_at=excluded.updated_at",
                            (data["device"], data["user_id"], data["active"], now))
-            elif data["user_id"] and event_type == "card_linked":
-                # Cartão vinculado a um ID existente: não altera active de um cadastro já conhecido.
+            elif data["user_id"] and event_type in {"card_linked", "card_unlinked"}:
+                # Cartão vinculado/desvinculado de um ID: não altera active de um cadastro já conhecido.
                 # Só cria a linha se o ID ainda não tiver sido recebido.
                 db.execute("INSERT INTO users VALUES(?,?,?,?) ON CONFLICT(device,user_id) DO UPDATE SET updated_at=excluded.updated_at",
                            (data["device"], data["user_id"], data["active"], now))

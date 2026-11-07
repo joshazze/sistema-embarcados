@@ -272,7 +272,7 @@ int main() {
  ui = Ui::LinkId; entry = "12"; tela("Vincular ID:", "12");
  ui = Ui::CardLink; pendingId = 2; tela("Aproxime cartao", "ID 002 * cancela");
  ui = Ui::Menu; now = 20000; tela("1 Novo 2 Inativ.", "3 Reativ. D Sair");
- now = 22500; tela("4 Vincula cartao", "D Sair");
+ now = 22500; tela("4 Vincula cartao", "5 Remove cartao");
  ui = Ui::Access; resetUi(); noticeDuration = 0;
  notice("Cartao em uso", "Use outro", true); tela("Cartao em uso", "Use outro");
  noticeDuration = 0;
@@ -368,7 +368,8 @@ class CartaoProtocoloTests(unittest.TestCase):
         eventos = _tabela(mega, 'eventNames')
         metodos = _tabela(mega, 'methodNames')
         motivos = _tabela(mega, 'reasonNames')
-        self.assertEqual(len(eventos), 19)
+        self.assertEqual(len(eventos), 20)
+        self.assertEqual(eventos[19], 'card_unlinked')
         self.assertEqual(eventos[17], 'card_linked')
         self.assertEqual(eventos[18], 'keypad_locked')
         self.assertEqual(eventos[16], 'enroll_failed')
@@ -377,14 +378,14 @@ class CartaoProtocoloTests(unittest.TestCase):
         self.assertEqual(motivos[17], 'unknown_card')
         self.assertEqual(motivos[16], 'Digitais diferem')
         # Contagens usadas pelo nameIndex (Mega) e pela CAM devem cobrir as tabelas novas.
-        self.assertIn('nameIndex(type, eventNames, 19)', mega)
+        self.assertIn('nameIndex(type, eventNames, 20)', mega)
         self.assertIn('nameIndex(method, methodNames, 10)', mega)
         self.assertIn('nameIndex(reason, reasonNames, 18)', mega)
         self.assertIn('item.event.reason < 18 ? reasonNames', cam)
         protocolo = (ROOT / 'firmware/shared/MessageProtocol.h').read_text(encoding='utf-8')
-        self.assertIn('EnrollFailed,\n  CardLinked, KeypadLocked\n', protocolo)
+        self.assertIn('EnrollFailed,\n  CardLinked, KeypadLocked, CardUnlinked\n', protocolo)
         self.assertIn('Usb, Web, Card };', protocolo)
-        self.assertIn('e.kind <= KeypadLocked', protocolo)
+        self.assertIn('e.kind <= CardUnlinked', protocolo)
         self.assertIn('e.method <= Card', protocolo)
 
     def test_list_e_boot_mostram_cartao_e_rfid(self):
@@ -398,7 +399,7 @@ class CartaoProtocoloTests(unittest.TestCase):
         textos = ['Aproxime cartao', '# pula', 'Vincular ID:', 'Cartao em uso', 'Use outro',
                   'Cartao lido', 'Crie senha (6)', 'Cartao vinculado', 'Cartao invalido',
                   'Erro na memoria', 'Cartao nao salvo', 'Cartao desconh.', '4 Vincula cartao',
-                  'D Sair', '1 Novo 2 Inativ.', '3 Reativ. D Sair', 'Cancelado', 'ID inexistente',
+                  '5 Remove cartao', '1 Novo 2 Inativ.', '3 Reativ. D Sair', 'Cancelado', 'ID inexistente',
                   ' * cancela']
         for texto in textos:
             self.assertLessEqual(len(texto) + (6 if texto == ' * cancela' else 0), 16, texto)

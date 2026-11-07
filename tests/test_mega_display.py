@@ -46,7 +46,7 @@ int main() {
  door.begin(true,now); resetUi(); noticeDuration=0;
  // (a) digitacao em Access: espelho mostra os digitos, LCD recebe so '*'
  entry="12"; ui=Ui::Access; lcd.written.clear(); now+=500; displayTick();
- assert(Serial.log.find("LCD| #confirma *limpa | 12\n")!=std::string::npos);
+ assert(Serial.log.find("LCD| #Confirma *Limpa | ID: 12\n")!=std::string::npos);
  assert(lcd.written.find("12")!=std::string::npos && lcd.written.find("**")==std::string::npos);
  // (b) digitacao em FirstPin: mesmo comportamento
  ui=Ui::FirstPin; entry="123456"; lcd.written.clear(); now+=500; displayTick();
@@ -54,7 +54,7 @@ int main() {
  assert(lcd.written.find("123456")==std::string::npos && lcd.written.find("******")!=std::string::npos);
  // (c) tela de senha do ID: espelho mantém o prefixo "ID 001: " e troca so os '*'
  ui=Ui::AccessPin; pendingId=1; entry="12"; lcd.written.clear(); now+=500; displayTick();
- assert(Serial.log.find("LCD| #confirma *limpa | ID 001: 12\n")!=std::string::npos);
+ assert(Serial.log.find("LCD| #Confirma *Limpa | ID 001: 12\n")!=std::string::npos);
  assert(lcd.written.find("ID 001: **")!=std::string::npos);
  return 0;
 }
@@ -79,7 +79,7 @@ int main() {
  assert(Serial.log=="LCD| Controle acesso | ID cartao dedo\n" && lcd.writes==32);
  // (c) senha em digitacao aparece so como '*'
  entry="12"; now+=500; displayTick();
- assert(Serial.log.find("LCD| #confirma *limpa | 12\n")!=std::string::npos);
+ assert(Serial.log.find("LCD| #Confirma *Limpa | ID: 12\n")!=std::string::npos);
  // ID de 1 a 3 digitos aparece no espelho (nao e segredo); a senha nunca aparece.
  size_t antes=Serial.log.size();
  ui=Ui::FirstPin; entry="123456"; now+=500; displayTick();

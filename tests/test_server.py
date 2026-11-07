@@ -228,6 +228,15 @@ class ServerTests(unittest.TestCase):
         for changes in [dict(method="rfid"), dict(method=None), dict(type="card_read")]:
             self.assertEqual(self.request("/api/device/events", self.event(event_id="bad-card", **{"type": "access_granted", **changes}), "device")[0], 400)
 
+    def test_card_unlinked_aceito_com_usuario_sem_mudar_active(self):
+        self.request("/api/device/events", self.event(event_id="enroll-u", type="user_enrolled", user_id=5, active=False), "device")
+        unlinked = self.event(event_id="unlink-1", type="card_unlinked", method="admin", user_id=5, active=True, reason="")
+        self.assertEqual(self.request("/api/device/events", unlinked, "device")[0], 200)
+        overview = self.request("/api/admin/overview")[1]
+        self.assertEqual([e["type"] for e in overview["events"] if e["event_id"] == "unlink-1"], ["card_unlinked"])
+        self.assertEqual([(u["user_id"], u["active"]) for u in overview["users"]], [(5, 0)])
+        self.assertEqual(self.request("/api/device/events", self.event(event_id="unlink-0", type="card_unlinked", method="admin", user_id=0), "device")[0], 400)
+
     def test_keypad_locked_aceito_sem_usuario(self):
         locked = self.event(event_id="lock-1", type="keypad_locked", method="keypad", user_id=0, active=False, reason="invalid_pin")
         self.assertEqual(self.request("/api/device/events", locked, "device")[0], 200)
@@ -245,6 +254,7 @@ class ServerTests(unittest.TestCase):
         self.assertIn("card_linked:'Cartão vinculado'", script)
         self.assertIn("unknown_card:'Cartão desconhecido'", script)
         self.assertIn("keypad_locked:'Teclado bloqueado'", script)
+        self.assertIn("card_unlinked:'Cartão desvinculado'", script)
 
     def test_no_password_exposed_in_overview(self):
         self.enroll()
