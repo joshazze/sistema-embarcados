@@ -10,6 +10,10 @@
 #include "Config.h"
 #include "SerialFrame.h"
 #include "MessageProtocol.h"
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+#include <WiFiClientSecure.h>
+#include "ServerCA.h"
+#endif
 #if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR) && defined(OTA_PASSWORD)
 #include <ArduinoOTA.h>
 #include <WebServer.h>
@@ -306,9 +310,26 @@ void receiveEvent(const uint8_t *data, uint16_t size, uint32_t receivedAt) {
   uint8_t ack[10]={kVersion,Ack}; put32(ack+2,e.messageId); put32(ack+6,e.boot);
   SerialFrame::send(Serial2,ack,sizeof ack);
 }
+// SERVER_URL em https:// (servidor na nuvem atrás do Caddy): TLS com as raízes de ServerCA.h.
+// Um único cliente TLS, reaproveitado entre pedidos (keep-alive do Caddy), para não refazer o
+// handshake (1 a 2 s e uns 40 KB de heap) a cada poll de 3 s. Só a networkTask usa.
+// Em http:// (LAN) nada muda: cliente novo e prazos curtos por pedido.
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+WiFiClient &secureClient() {
+  static WiFiClientSecure tls; static bool configured=false;
+  if (!configured) { tls.setCACert(SERVER_CA_PEM); tls.setHandshakeTimeout(8); configured=true; }
+  return tls;
+}
+#endif
 int request(const char *path, const String &body, String &response) {
-  WiFiClient client; HTTPClient http; http.setConnectTimeout(600); http.setTimeout(900);
-  if (!http.begin(client,String(SERVER_URL)+path)) return -1;
+  const bool tls=strncmp(SERVER_URL,"https://",8)==0;
+  WiFiClient client; HTTPClient http; http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 5000 : 900);
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+  WiFiClient &link=tls ? secureClient() : client;
+#else
+  WiFiClient &link=client;
+#endif
+  if (!http.begin(link,String(SERVER_URL)+path)) return -1;
   http.addHeader("X-Device-Key",DEVICE_KEY);
   int code;
   if (body.length()) { http.addHeader("Content-Type","application/json"); code=http.POST(body); }
@@ -335,8 +356,14 @@ bool sendPhoto(const Item &item, int *status = nullptr) {
   if (status) *status=0;
   if (!item.photo) return true;
   char id[73]; eventId(item.event,id,sizeof id);
-  WiFiClient client; HTTPClient http; http.setConnectTimeout(600); http.setTimeout(1500);
-  if (!http.begin(client,String(SERVER_URL)+"/api/device/photo")) { if (status) *status=-1; return false; }
+  const bool tls=strncmp(SERVER_URL,"https://",8)==0;
+  WiFiClient client; HTTPClient http; http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 8000 : 1500);
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+  WiFiClient &link=tls ? secureClient() : client;
+#else
+  WiFiClient &link=client;
+#endif
+  if (!http.begin(link,String(SERVER_URL)+"/api/device/photo")) { if (status) *status=-1; return false; }
   http.addHeader("X-Device-Key",DEVICE_KEY); http.addHeader("X-Event-Id",id); http.addHeader("Content-Type","image/jpeg");
   int code=http.POST(item.photo,item.photoSize); String body=code>0 ? http.getString() : ""; http.end();
   JsonDocument ack; bool accepted=code==200 && !deserializeJson(ack,body) && ack["accepted"].as<String>()==id;
