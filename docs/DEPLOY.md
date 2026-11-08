@@ -52,6 +52,21 @@ constexpr char DEVICE_KEY[] = "<DEVICE_KEY do /etc/controle-acesso.env>";
 
 O Wi-Fi da CAM precisa ter saída para a internet (NTP e 443). Certificado de outra autoridade que não a Let's Encrypt: trocar o texto de `ServerCA.h` pela raiz dela. O `Caddyfile` fixa `cert_issuer acme` para o Caddy não cair na ZeroSSL, cuja raiz a CAM não conhece.
 
+### Primeira gravação em HTTPS: o que olhar no monitor serial
+
+1. `CAM wifi conectado 192.168.x.x`: Wi-Fi ok. Sem essa linha o problema é SSID/senha, não TLS.
+2. Em até ~15 s o painel mostra o aparelho em "dispositivos" (heartbeat). Se aparecer, TLS, certificado e `DEVICE_KEY` estão certos.
+3. Se aparecer `CAM tls: falha -1, mbedtls <n> (<texto>), heap <h>, maior bloco <b>` (no máximo uma vez a cada 10 s):
+   - texto com `X509` ou `verify`: certificado. Conferir se o servidor ainda é Let's Encrypt e se `ServerCA.h` tem X1 e X2.
+   - texto com `memory`/`alloc`, ou `maior bloco` abaixo de ~40000: falta de heap no handshake com a câmera ligada.
+   - `-1` sem texto: DNS ou porta 443 bloqueada na rede (Wi-Fi da faculdade costuma bloquear portas, não a 443).
+4. `Fila CAM: ... HTTP rejeitado (possivel erro de configuracao...) (401)`: `DEVICE_KEY` diferente da do `/etc/controle-acesso.env`.
+5. Acesso autorizado aparece no painel com foto: ponta a ponta ok.
+
+O cliente TLS e o `HTTPClient` do caminho TLS são estáticos: o `~HTTPClient()` do core chama `stop()` no cliente, então com objeto local a conexão fecharia a cada pedido e a CAM refaria o handshake a cada poll de 3 s.
+
+Simulação feita em 08/11/2026 contra o servidor real, com Python confiando só em X1+X2 e uma conexão keep-alive: handshake de 308 ms (TLS 1.3), depois heartbeat, cadastro, acesso, foto de 16 KB e poll de comando entre 22 e 50 ms cada, todos 200, e o painel mostrou o evento com foto. Os registros de teste foram apagados do banco.
+
 ## Operação
 
 ```sh
