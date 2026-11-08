@@ -3,6 +3,8 @@
 #   sudo DOMINIO=controle-acesso.duckdns.org PAINEL_USUARIO=admin bash deploy/instalar.sh
 # Pede a senha do painel (camada do Caddy; ou PAINEL_SENHA no ambiente) e gera ADMIN_PIN e DEVICE_KEY se ainda não existirem.
 # Pode ser rodado de novo para atualizar o código: preserva /etc/controle-acesso.env e o banco.
+# Opcional: DUCKDNS_TOKEN=... faz a VM manter o domínio DuckDNS no IP atual (boot e a cada 5 min).
+# Instala também o backup diário do banco (03:30, 14 dias em /var/lib/controle-acesso/backups).
 set -euo pipefail
 : "${DOMINIO:?defina DOMINIO (ex.: controle-acesso.duckdns.org)}"
 PAINEL_USUARIO="${PAINEL_USUARIO:-admin}"
@@ -19,7 +21,8 @@ fi
 
 id controle >/dev/null 2>&1 || useradd --system --no-create-home --shell /usr/sbin/nologin controle
 install -d -m 0755 /opt/controle-acesso
-cp -r "$REPO_DIR/servidor" /opt/controle-acesso/
+rm -rf /opt/controle-acesso/servidor /opt/controle-acesso/deploy
+cp -r "$REPO_DIR/servidor" "$REPO_DIR/deploy" /opt/controle-acesso/
 rm -f /opt/controle-acesso/servidor/*.sqlite3*
 chown -R root:root /opt/controle-acesso
 
@@ -34,9 +37,17 @@ if [ ! -f "$ENV" ]; then
 fi
 chown root:controle "$ENV"; chmod 0640 "$ENV"
 
-install -m 0644 "$REPO_DIR/deploy/controle-acesso.service" /etc/systemd/system/controle-acesso.service
+for unit in controle-acesso.service controle-acesso-backup.service controle-acesso-backup.timer duckdns.service duckdns.timer; do
+  install -m 0644 "$REPO_DIR/deploy/$unit" "/etc/systemd/system/$unit"
+done
+# DuckDNS opcional: DUCKDNS_TOKEN no ambiente grava o arquivo; DUCKDNS_DOMINIO sai do DOMINIO.
+if [ -n "${DUCKDNS_TOKEN:-}" ]; then
+  umask 077
+  printf 'DUCKDNS_DOMINIO=%s\nDUCKDNS_TOKEN=%s\n' "${DOMINIO%%.duckdns.org}" "$DUCKDNS_TOKEN" > /etc/controle-acesso-duckdns.env
+  chmod 0600 /etc/controle-acesso-duckdns.env
+fi
 systemctl daemon-reload
-systemctl enable --now controle-acesso
+systemctl enable --now controle-acesso controle-acesso-backup.timer duckdns.timer
 systemctl restart controle-acesso
 
 if [ ! -f /etc/caddy/painel.hash ]; then
