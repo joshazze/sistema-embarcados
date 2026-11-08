@@ -41,6 +41,17 @@ O script instala Python e Caddy, cria o usuário de sistema `controle`, copia `s
 
 Para atualizar o código depois: `git pull` e o mesmo comando. O `.env`, a senha do painel e o banco são preservados.
 
+Com domínio DuckDNS, acrescente `DUCKDNS_TOKEN=<token>` ao comando (ou crie `/etc/controle-acesso-duckdns.env` com `DUCKDNS_DOMINIO=<nome sem .duckdns.org>` e `DUCKDNS_TOKEN=<token>`, modo 0600). A VM passa a atualizar o próprio IP no boot e a cada 5 min (`duckdns.timer`): sem isso, depois de um stop/start o IP público muda e o domínio fica apontando para o endereço antigo.
+
+## Testar o servidor sem a placa
+
+```sh
+DEVICE_KEY=<chave> python3 scripts/testar-servidor.py https://seu-nome.duckdns.org
+DEVICE_KEY=<chave> PAINEL_USUARIO=admin PAINEL_SENHA=<senha> ADMIN_PIN=<pin> python3 scripts/testar-servidor.py https://seu-nome.duckdns.org
+```
+
+Confia só nas raízes do `ServerCA.h` (as mesmas da CAM), reaproveita a conexão como a CAM e usa apenas pedidos que não gravam nada. Não manda heartbeat de propósito: com outro `cam_boot_id`, enquanto a CAM real está ligada, o servidor somaria os contadores dela duas vezes. Com o painel, mostra há quantos segundos o aparelho foi visto. Sai com código 1 se algo falhar; um certificado de outra autoridade aparece como `FALHA: certificado não fecha nas raízes da CAM`.
+
 ## CAM
 
 No `Config.h` da `firmware/Esp32CamRede`:
@@ -72,8 +83,13 @@ Simulação feita em 08/11/2026 contra o servidor real, com Python confiando só
 ```sh
 sudo systemctl status controle-acesso caddy
 sudo journalctl -u controle-acesso -u caddy -f
-sudo sqlite3 /var/lib/controle-acesso/historico.sqlite3 .dump | gzip > backup.sql.gz   # contém fotos
+sudo systemctl list-timers controle-acesso-backup.timer duckdns.timer
+sudo ls -l /var/lib/controle-acesso/backups      # um arquivo por dia, 14 dias
 ```
+
+O `controle-acesso-backup.timer` copia o banco todo dia às 03:30 (UTC) pela API de backup do SQLite, confere `PRAGMA integrity_check` e guarda 14 dias em `/var/lib/controle-acesso/backups` (contém fotos; modo 0600). O backup fica no mesmo disco: protege de banco corrompido e de exclusão por engano, não da perda da VM. Para levar uma cópia para fora: `scp -i <chave> ubuntu@<ip>:...` depois de `sudo cp` para a home.
+
+Restaurar: `sudo systemctl stop controle-acesso`, copiar o arquivo do dia sobre `/var/lib/controle-acesso/historico.sqlite3` (dono `controle`, modo 0600) e `sudo systemctl start controle-acesso`.
 
 ## Limites
 
