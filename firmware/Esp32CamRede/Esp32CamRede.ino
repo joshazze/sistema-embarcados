@@ -313,28 +313,45 @@ void receiveEvent(const uint8_t *data, uint16_t size, uint32_t receivedAt) {
 // SERVER_URL em https:// (servidor na nuvem atrás do Caddy): TLS com as raízes de ServerCA.h.
 // Um único cliente TLS, reaproveitado entre pedidos (keep-alive do Caddy), para não refazer o
 // handshake (1 a 2 s e uns 40 KB de heap) a cada poll de 3 s. Só a networkTask usa.
+// O HTTPClient do caminho TLS também é estático: ~HTTPClient() chama stop() no cliente e
+// fecharia a conexão a cada pedido. end() limpa os cabeçalhos, então não acumulam.
 // Em http:// (LAN) nada muda: cliente novo e prazos curtos por pedido.
 #if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
-WiFiClient &secureClient() {
+WiFiClientSecure &secureClient() {
   static WiFiClientSecure tls; static bool configured=false;
   if (!configured) { tls.setCACert(SERVER_CA_PEM); tls.setHandshakeTimeout(8); configured=true; }
   return tls;
 }
+// Falha de transporte em TLS: erro do mbedtls e heap livre na serial, no máximo a cada 10 s.
+void reportTlsFailure(int code) {
+  static uint32_t last=0; static bool any=false;
+  if (code>=0 || (any && uint32_t(millis()-last)<10000)) return;
+  any=true; last=millis(); char text[96]={0};
+  int err=secureClient().lastError(text,sizeof text);
+  Serial.printf("CAM tls: falha %d, mbedtls %d (%s), heap %u, maior bloco %u\n",code,err,text,
+    (unsigned)ESP.getFreeHeap(),(unsigned)ESP.getMaxAllocHeap());
+}
 #endif
 int request(const char *path, const String &body, String &response) {
   const bool tls=strncmp(SERVER_URL,"https://",8)==0;
-  WiFiClient client; HTTPClient http; http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 5000 : 900);
+  WiFiClient client; HTTPClient local;
 #if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
-  WiFiClient &link=tls ? secureClient() : client;
+  static HTTPClient shared; HTTPClient &http=tls ? shared : local;
+  WiFiClient &link=tls ? (WiFiClient &)secureClient() : client;
 #else
-  WiFiClient &link=client;
+  HTTPClient &http=local; WiFiClient &link=client;
 #endif
+  http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 5000 : 900);
   if (!http.begin(link,String(SERVER_URL)+path)) return -1;
   http.addHeader("X-Device-Key",DEVICE_KEY);
   int code;
   if (body.length()) { http.addHeader("Content-Type","application/json"); code=http.POST(body); }
   else code=http.GET();
-  if (code > 0) response=http.getString(); http.end(); return code;
+  if (code > 0) response=http.getString(); http.end();
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+  if (tls) reportTlsFailure(code);
+#endif
+  return code;
 }
 bool sendEvent(const Item &item, int *status = nullptr) {
   char id[73], boot[16]; eventId(item.event,id,sizeof id);
@@ -357,15 +374,20 @@ bool sendPhoto(const Item &item, int *status = nullptr) {
   if (!item.photo) return true;
   char id[73]; eventId(item.event,id,sizeof id);
   const bool tls=strncmp(SERVER_URL,"https://",8)==0;
-  WiFiClient client; HTTPClient http; http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 8000 : 1500);
+  WiFiClient client; HTTPClient local;
 #if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
-  WiFiClient &link=tls ? secureClient() : client;
+  static HTTPClient shared; HTTPClient &http=tls ? shared : local;
+  WiFiClient &link=tls ? (WiFiClient &)secureClient() : client;
 #else
-  WiFiClient &link=client;
+  HTTPClient &http=local; WiFiClient &link=client;
 #endif
+  http.setConnectTimeout(tls ? 5000 : 600); http.setTimeout(tls ? 8000 : 1500);
   if (!http.begin(link,String(SERVER_URL)+"/api/device/photo")) { if (status) *status=-1; return false; }
   http.addHeader("X-Device-Key",DEVICE_KEY); http.addHeader("X-Event-Id",id); http.addHeader("Content-Type","image/jpeg");
   int code=http.POST(item.photo,item.photoSize); String body=code>0 ? http.getString() : ""; http.end();
+#if defined(ARDUINO) && defined(ESP_ARDUINO_VERSION_MAJOR)
+  if (tls) reportTlsFailure(code);
+#endif
   JsonDocument ack; bool accepted=code==200 && !deserializeJson(ack,body) && ack["accepted"].as<String>()==id;
   if (status) *status=accepted ? 0 : (code==200 ? -10000 : code);
   return accepted;
