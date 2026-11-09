@@ -687,7 +687,7 @@ void displayTick() {
     }
     else if (entry.length()) b += entry;
     else b = fingerprintReady ? "ID cartao dedo" : "ID ou cartao";
-    // Home animada: 4 cenas de 3 s (texto acima, cartão, ID + senha, digital), quadros de 300 ms.
+    // Home animada: 4 cenas de 3 s ("Controle acesso", cartão, ID + senha, digital), quadros de 300 ms.
     // Sem digital pronta, a cena da digital vira a de texto. O espelho da serial fica no texto.
     if (!entry.length() && storageReady) {
       auto sp = [](uint8_t n) { String s; while (n--) s += ' '; return s; };
@@ -695,8 +695,10 @@ void displayTick() {
       uint8_t scene = (t / 3000) % 4;
       if (scene == 3 && !fingerprintReady) scene = 0;
       const uint8_t f = (t % 3000) / 300;  // quadro 0 a 9
-      if (scene) { homeAnimated = true; mirrorA = a; mirrorB = b; }
-      if (scene == 1) {
+      // O espelho da serial guarda o texto completo; no LCD, a cena de texto mostra só "Controle acesso".
+      homeAnimated = true; mirrorA = a; mirrorB = b;
+      if (scene == 0) b = "";
+      else if (scene == 1) {
         // Cartão desliza até o leitor; no fim, o visto.
         const uint8_t pos = 2 + f;  // coluna 2 a 11
         a = "Aproxime cartao"; b = sp(pos); b += char(1); b += sp(12 - pos); b += char(2);
