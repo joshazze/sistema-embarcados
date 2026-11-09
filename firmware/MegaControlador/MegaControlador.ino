@@ -506,6 +506,11 @@ void fingerprintTick() {
   }
   if (p == FINGERPRINT_NOFINGER) { waitFingerRemoval = false; return; }
   if (p != FINGERPRINT_OK) {
+    // Diagnóstico de bancada: código cru do getImage (0x01 pacote, 0x03 imagem, 0xFE timeout).
+    // Fora da placa (simulação dos testes no host) não há Serial.
+#ifdef ARDUINO
+    Serial.print(F("DY50 err=0x")); Serial.println(p, HEX);
+#endif
     if (ui != Ui::Access) failEnrollment("Erro de leitura", "Erro de leitura");
     else notice("Falha no leitor", "Tente novamente", true);
     return;
